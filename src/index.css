@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    
+    /* Light Mode Palette (Warm Cream & Amber Gold as in design) */
+    --bg-base: #faf8f4;
+    --bg-surface: #ffffff;
+    --bg-subtle: #f4efe6;
+    --bg-card-hover: #fcfbfa;
+    --border-base: #e7e1d5;
+    --border-strong: #d3cbbe;
+    --text-primary: #191816;
+    --text-secondary: #57534e;
+    --text-muted: #857e75;
+    --brand-accent: #d97706;
+    --brand-accent-hover: #b45309;
+    --brand-accent-text: #ffffff;
+    --brand-badge-bg: #fef3c7;
+    --brand-badge-text: #92400e;
+
+    /* Statuses */
+    --status-avail-bg: #ecfdf5;
+    --status-avail-text: #065f46;
+    --status-avail-dot: #10b981;
+    --status-trip-bg: #fffbeb;
+    --status-trip-text: #92400e;
+    --status-trip-dot: #f59e0b;
+    --status-shop-bg: #fef2f2;
+    --status-shop-text: #991b1b;
+    --status-shop-dot: #ef4444;
+    --status-retired-bg: #f1f5f9;
+    --status-retired-text: #475569;
+    --status-retired-dot: #94a3b8;
+  }
+
+  .dark {
+    /* Dark Mode Palette (Obsidian Deep Dark & Electric Lime as in design) */
+    --bg-base: #0c0e11;
+    --bg-surface: #13161c;
+    --bg-subtle: #191d25;
+    --bg-card-hover: #1f242e;
+    --border-base: #242934;
+    --border-strong: #333a49;
+    --text-primary: #f3f4f6;
+    --text-secondary: #9ca3af;
+    --text-muted: #6b7280;
+    --brand-accent: #ccff00;
+    --brand-accent-hover: #b8e600;
+    --brand-accent-text: #000000;
+    --brand-badge-bg: rgba(204, 255, 0, 0.12);
+    --brand-badge-text: #ccff00;
+
+    /* Statuses */
+    --status-avail-bg: rgba(16, 185, 129, 0.15);
+    --status-avail-text: #34d399;
+    --status-avail-dot: #10b981;
+    --status-trip-bg: rgba(245, 158, 11, 0.15);
+    --status-trip-text: #fbbf24;
+    --status-trip-dot: #f59e0b;
+    --status-shop-bg: rgba(239, 68, 68, 0.15);
+    --status-shop-text: #f87171;
+    --status-shop-dot: #ef4444;
+    --status-retired-bg: rgba(148, 163, 184, 0.15);
+    --status-retired-text: #94a3b8;
+    --status-retired-dot: #64748b;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+}
+
+/* Custom subtle scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(150, 150, 150, 0.2);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(150, 150, 150, 0.4);
+}

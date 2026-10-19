@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>TransitOps.Api</RootNamespace>
+    <NoWarn>$(NoWarn);NU1510;NU1902;NU1903</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TransitOps.Domain\TransitOps.Domain.csproj" />
+    <ProjectReference Include="..\TransitOps.Application\TransitOps.Application.csproj" />
+    <ProjectReference Include="..\TransitOps.Infrastructure\TransitOps.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.0-preview.*" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
+    <PackageReference Include="Hangfire.Dashboard.Basic.Authentication" Version="7.0.1" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="9.0.2" />
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="9.0.2" />
+  </ItemGroup>
+
+</Project>

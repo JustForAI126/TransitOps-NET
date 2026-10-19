@@ -6,7 +6,7 @@ namespace TransitOps.Domain.Entities;
 public class ApplicationUser : IdentityUser
 {
     public string FullName { get; set; } = string.Empty;
-    public UserRole Role { get; set; } = UserRole.FleetManager;
+    public UserRole Role { get; set; } = UserRole.Driver;
     public string? AvatarUrl { get; set; }
     public string TenantId { get; set; } = string.Empty; // Multi-tenant isolation
     public bool IsDemoAccount { get; set; } = false;
@@ -51,6 +51,7 @@ public class Driver
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string TenantId { get; set; } = string.Empty;
+    public string? IdentityUserId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string ContactNumber { get; set; } = string.Empty;

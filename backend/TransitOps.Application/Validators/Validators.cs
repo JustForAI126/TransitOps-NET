@@ -1,7 +1,47 @@
 using FluentValidation;
 using TransitOps.Application.DTOs;
+using TransitOps.Domain.Enums;
 
 namespace TransitOps.Application.Validators;
+
+public class LoginValidator : AbstractValidator<LoginRequest>
+{
+    public LoginValidator()
+    {
+        RuleFor(x => x.Email)
+            .NotEmpty().EmailAddress();
+        RuleFor(x => x.Password)
+            .NotEmpty();
+    }
+}
+
+public class CreateOrganizationUserValidator : AbstractValidator<CreateOrganizationUserRequest>
+{
+    public CreateOrganizationUserValidator()
+    {
+        RuleFor(x => x.FullName)
+            .NotEmpty().Must(value => !string.IsNullOrWhiteSpace(value))
+            .MaximumLength(100);
+        RuleFor(x => x.Email)
+            .NotEmpty().EmailAddress().MaximumLength(256);
+        RuleFor(x => x.Password)
+            .NotEmpty().MinimumLength(10)
+            .Matches("[A-Z]").WithMessage("Password must contain an uppercase letter.")
+            .Matches("[a-z]").WithMessage("Password must contain a lowercase letter.")
+            .Matches("[0-9]").WithMessage("Password must contain a digit.")
+            .Matches("[^a-zA-Z0-9]").WithMessage("Password must contain a non-alphanumeric character.");
+        RuleFor(x => x.Role).IsInEnum()
+            .Must(role => role != UserRole.OrganizationAdmin)
+            .WithMessage("Organization administrators can only be provisioned through the trusted organization setup process.");
+        When(x => x.Role == UserRole.Driver, () =>
+        {
+            RuleFor(x => x.ContactNumber).NotEmpty().MaximumLength(32);
+            RuleFor(x => x.LicenseNumber).NotEmpty().MaximumLength(64);
+            RuleFor(x => x.LicenseCategory).NotEmpty().MaximumLength(64);
+            RuleFor(x => x.LicenseExpiryDate).NotNull();
+        });
+    }
+}
 
 public class CreateVehicleValidator : AbstractValidator<CreateVehicleRequest>
 {
@@ -9,10 +49,19 @@ public class CreateVehicleValidator : AbstractValidator<CreateVehicleRequest>
     {
         RuleFor(x => x.RegistrationNumber)
             .NotEmpty().WithMessage("Registration / License plate number is required.")
+            .Must(value => !string.IsNullOrWhiteSpace(value))
             .MaximumLength(32).WithMessage("Registration number cannot exceed 32 characters.");
 
         RuleFor(x => x.Name)
-            .NotEmpty().WithMessage("Vehicle name or nickname is required.");
+            .NotEmpty().Must(value => !string.IsNullOrWhiteSpace(value))
+            .WithMessage("Vehicle name or nickname is required.");
+
+        RuleFor(x => x.Model)
+            .NotEmpty().Must(value => !string.IsNullOrWhiteSpace(value))
+            .MaximumLength(100);
+
+        RuleFor(x => x.Type)
+            .IsInEnum();
 
         RuleFor(x => x.MaxCapacityKg)
             .GreaterThan(0).WithMessage("Max cargo payload capacity must be greater than 0 kg.");
@@ -22,6 +71,10 @@ public class CreateVehicleValidator : AbstractValidator<CreateVehicleRequest>
 
         RuleFor(x => x.CurrentOdometerKm)
             .GreaterThanOrEqualTo(0).WithMessage("Odometer reading cannot be negative.");
+
+        RuleFor(x => x.Region)
+            .NotEmpty().Must(value => !string.IsNullOrWhiteSpace(value))
+            .MaximumLength(100);
     }
 }
 
@@ -30,7 +83,8 @@ public class CreateDriverValidator : AbstractValidator<CreateDriverRequest>
     public CreateDriverValidator()
     {
         RuleFor(x => x.Name)
-            .NotEmpty().WithMessage("Driver full name is required.")
+            .NotEmpty().Must(value => !string.IsNullOrWhiteSpace(value))
+            .WithMessage("Driver full name is required.")
             .MaximumLength(100);
 
         RuleFor(x => x.Email)
@@ -38,12 +92,26 @@ public class CreateDriverValidator : AbstractValidator<CreateDriverRequest>
             .EmailAddress().WithMessage("A valid email address must be provided.");
 
         RuleFor(x => x.LicenseNumber)
-            .NotEmpty().WithMessage("Commercial driver permit / license number is mandatory.");
+            .NotEmpty().Must(value => !string.IsNullOrWhiteSpace(value))
+            .WithMessage("Commercial driver permit / license number is mandatory.")
+            .MaximumLength(64);
+
+        RuleFor(x => x.LicenseCategory)
+            .NotEmpty().Must(value => !string.IsNullOrWhiteSpace(value))
+            .MaximumLength(64);
+
+        RuleFor(x => x.ContactNumber)
+            .NotEmpty()
+            .Must(value => System.Text.RegularExpressions.Regex.IsMatch(
+                value.Replace(" ", "").Replace("-", "").Replace("(", "").Replace(")", ""),
+                @"^\+?[1-9]\d{6,14}$"))
+            .WithMessage("Contact number must be a valid international phone number.");
 
         RuleFor(x => x.LicenseExpiryDate)
             .NotEmpty().WithMessage("License expiry date is required.");
     }
 }
+
 
 public class CreateTripValidator : AbstractValidator<CreateTripRequest>
 {

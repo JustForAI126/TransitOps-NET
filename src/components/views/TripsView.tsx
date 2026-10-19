@@ -17,6 +17,7 @@ import { useApp } from '../../context/AppContext';
 import { useTheme } from '../../context/ThemeContext';
 import { Trip, TripStatus } from '../../types';
 import { formatRupees } from '../../utils/currency';
+import { api } from '../../services/api';
 
 interface TripsViewProps {
   onOpenNewTripModal: () => void;
@@ -27,12 +28,37 @@ export const TripsView: React.FC<TripsViewProps> = ({
   onOpenNewTripModal,
   onOpenCompleteTripModal,
 }) => {
-  const { trips, vehicles, dispatchTrip, cancelTrip, exportToCSV } = useApp();
+  const { trips, vehicles, currentUser, dispatchTrip, cancelTrip, exportToCSV } = useApp();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  const canManageTrips = currentUser?.role === 'fleet_manager' || currentUser?.role === 'driver';
+  const canExportTrips = currentUser?.role === 'fleet_manager' || currentUser?.role === 'financial_analyst';
+  const canViewFinancials = currentUser?.role === 'fleet_manager' || currentUser?.role === 'financial_analyst';
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
+  const [downloadingReceiptFor, setDownloadingReceiptFor] = useState<string | null>(null);
+  const [receiptError, setReceiptError] = useState<string | null>(null);
+
+  const downloadTurnInReceipt = async (trip: Trip) => {
+    setReceiptError(null);
+    setDownloadingReceiptFor(trip.id);
+    try {
+      const pdf = await api.reports.exportTripReceiptPdf(trip.id);
+      const url = URL.createObjectURL(pdf);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `transitops-receipt-${trip.tripCode}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      setReceiptError(error instanceof Error ? error.message : 'Could not generate the trip receipt.');
+    } finally {
+      setDownloadingReceiptFor(null);
+    }
+  };
 
   const filteredTrips = trips.filter((t) => {
     const matchSearch =
@@ -54,7 +80,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
       Driver: t.driverName,
       'Cargo (kg)': t.cargoWeightKg,
       'Distance (km)': t.plannedDistanceKm,
-      'Revenue (₹)': t.revenue,
+      ...(canViewFinancials ? { 'Revenue (₹)': t.revenue } : {}),
       Status: t.status,
       'Created At': t.createdAt,
       'Dispatched At': t.dispatchedAt || 'N/A',
@@ -116,30 +142,39 @@ export const TripsView: React.FC<TripsViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2.5">
-          <button
-            onClick={handleExport}
-            className={`px-3 py-2 rounded-xl text-xs font-semibold border flex items-center gap-1.5 transition-colors ${
-              isDark
-                ? 'bg-[#151921] border-[#262d3a] hover:bg-[#1d232f] text-neutral-200'
-                : 'bg-white border-[#ded7ca] hover:bg-neutral-100 text-neutral-800'
-            }`}
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export Manifest</span>
-          </button>
-          <button
-            onClick={onOpenNewTripModal}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 ${
-              isDark
-                ? 'bg-[#ccff00] text-black hover:bg-[#bbf000]'
-                : 'bg-[#d97706] text-white hover:bg-[#b45309]'
-            }`}
-          >
-            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span>Create Trip</span>
-          </button>
+          {canExportTrips && (
+            <button
+              onClick={handleExport}
+              className={`px-3 py-2 rounded-xl text-xs font-semibold border flex items-center gap-1.5 transition-colors ${
+                isDark
+                  ? 'bg-[#151921] border-[#262d3a] hover:bg-[#1d232f] text-neutral-200'
+                  : 'bg-white border-[#ded7ca] hover:bg-neutral-100 text-neutral-800'
+              }`}
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export Manifest</span>
+            </button>
+          )}
+          {canManageTrips && (
+            <button
+              onClick={onOpenNewTripModal}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 ${
+                isDark
+                  ? 'bg-[#ccff00] text-black hover:bg-[#bbf000]'
+                  : 'bg-[#d97706] text-white hover:bg-[#b45309]'
+              }`}
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Create Trip</span>
+            </button>
+          )}
         </div>
       </div>
+      {receiptError && (
+        <p role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-500">
+          {receiptError}
+        </p>
+      )}
 
       {/* Filter and Search Bar */}
       <div
@@ -197,26 +232,34 @@ export const TripsView: React.FC<TripsViewProps> = ({
                 <th className="py-3">Vehicle</th>
                 <th className="py-3">Driver</th>
                 <th className="py-3">Cargo Load</th>
-                <th className="py-3">Est. Revenue</th>
+                {canViewFinancials && <th className="py-3">Est. Revenue</th>}
                 <th className="py-3">Status</th>
-                <th className="py-3 text-right pr-4">Operational Action</th>
+                <th className="py-3 text-right pr-4">
+                  {canManageTrips ? 'Operational Action' : 'Trip Details'}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-inherit">
               {filteredTrips.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-neutral-400">
+                  <td colSpan={canViewFinancials ? 9 : 8} className="py-12 text-center text-neutral-400">
                     <div className="max-w-sm mx-auto space-y-2">
                       <Route className="w-10 h-10 mx-auto opacity-40 text-amber-500" />
                       <p className="font-bold text-sm">No Dispatches Scheduled</p>
-                      <p className="text-xs">No active or draft trips in this workspace. Plan your first cargo route.</p>
-                      <button
-                        onClick={onOpenNewTripModal}
-                        className="mt-2 px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-500 hover:bg-amber-600 text-black inline-flex items-center gap-1.5 transition-colors"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Schedule First Dispatch</span>
-                      </button>
+                      <p className="text-xs">
+                        {canManageTrips
+                          ? 'No active or draft trips in this workspace. Plan your first cargo route.'
+                          : 'No trips are available in this workspace.'}
+                      </p>
+                      {canManageTrips && (
+                        <button
+                          onClick={onOpenNewTripModal}
+                          className="mt-2 px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-500 hover:bg-amber-600 text-black inline-flex items-center gap-1.5 transition-colors"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Schedule First Dispatch</span>
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -270,12 +313,14 @@ export const TripsView: React.FC<TripsViewProps> = ({
                         </div>
                         <span className="text-[10px] text-neutral-400">{loadPercent}% capacity</span>
                       </td>
-                      <td className="py-3.5 font-mono font-bold text-emerald-400">
-                        {formatRupees(t.revenue)}
-                      </td>
+                      {canViewFinancials && (
+                        <td className="py-3.5 font-mono font-bold text-emerald-400">
+                          {t.revenue === null ? '—' : formatRupees(t.revenue)}
+                        </td>
+                      )}
                     <td className="py-3.5">{getStatusBadge(t.status)}</td>
                     <td className="py-3.5 text-right pr-4">
-                      {t.status === 'Draft' && (
+                      {canManageTrips && t.status === 'Draft' && (
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => dispatchTrip(t.id)}
@@ -296,7 +341,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
                           </button>
                         </div>
                       )}
-                      {t.status === 'Dispatched' && (
+                      {canManageTrips && t.status === 'Dispatched' && (
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => onOpenCompleteTripModal(t)}
@@ -314,9 +359,19 @@ export const TripsView: React.FC<TripsViewProps> = ({
                         </div>
                       )}
                       {t.status === 'Completed' && (
-                        <div className="text-[11px] text-neutral-400 space-y-0.5">
+                        <div className="text-[11px] text-neutral-400 space-y-1">
                           <div>Final: {t.finalOdometerKm?.toLocaleString()} km</div>
                           <div>Fuel: {t.fuelConsumedLiters} L</div>
+                          {canManageTrips && (
+                            <button
+                              onClick={() => void downloadTurnInReceipt(t)}
+                              disabled={downloadingReceiptFor === t.id}
+                              className="inline-flex items-center gap-1 pt-1 text-emerald-500 hover:underline disabled:opacity-50"
+                            >
+                              <Download className="w-3 h-3" />
+                              {downloadingReceiptFor === t.id ? 'Generating…' : 'PDF receipt'}
+                            </button>
+                          )}
                         </div>
                       )}
                       {t.status === 'Cancelled' && (

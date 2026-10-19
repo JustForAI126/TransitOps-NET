@@ -13,29 +13,40 @@ import {
   BarChart,
   Sun,
   Moon,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useTheme } from '../../context/ThemeContext';
 import { UserRole } from '../../types';
 
 export const LoginView: React.FC = () => {
-  const { login, setActiveView, setUserRole } = useApp();
+  const { login, setActiveView } = useApp();
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === 'dark';
 
-  const [email, setEmail] = useState('alex.morgan@transitops.com');
-  const [password, setPassword] = useState('••••••••••••');
+  const [email, setEmail] = useState('manager@transitops.com');
+  const [password, setPassword] = useState('');
   const [selectedRole, setSelectedRole] = useState<UserRole>('fleet_manager');
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    login(email, selectedRole);
+    setLoginError(null);
+    setIsSubmitting(true);
+    try {
+      const result = await login(email, password);
+      if (!result.success) setLoginError(result.error ?? 'Unable to sign in. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleQuickLogin = (role: UserRole, demoEmail: string) => {
     setSelectedRole(role);
     setEmail(demoEmail);
-    login(demoEmail, role);
   };
 
   return (
@@ -47,7 +58,7 @@ export const LoginView: React.FC = () => {
       {/* Top Bar */}
       <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
         <button
-          onClick={() => setActiveView('hero')}
+          onClick={() => setActiveView('login')}
           className="flex items-center gap-2 text-xs font-extrabold tracking-wider uppercase"
         >
           <span
@@ -136,14 +147,15 @@ export const LoginView: React.FC = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-neutral-400 mb-1">
-                  Select Workspace Role
+                  Select a demo account
                 </label>
                 <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl border bg-neutral-500/5">
                   {[
-                    { role: 'fleet_manager' as UserRole, label: 'Fleet Manager', email: 'alex.morgan@transitops.com' },
-                    { role: 'driver' as UserRole, label: 'Driver / Dispatch', email: 'sarah.chen@transitops.com' },
-                    { role: 'safety_officer' as UserRole, label: 'Safety Officer', email: 'marcus.vance@transitops.com' },
-                    { role: 'financial_analyst' as UserRole, label: 'Financial Analyst', email: 'priya.sharma@transitops.com' },
+                    { role: 'organization_admin' as UserRole, label: 'Organization Admin', email: 'admin@transitops.com' },
+                    { role: 'fleet_manager' as UserRole, label: 'Fleet Manager', email: 'manager@transitops.com' },
+                    { role: 'driver' as UserRole, label: 'Driver', email: 'driver@transitops.com' },
+                    { role: 'safety_officer' as UserRole, label: 'Safety Officer', email: 'safety@transitops.com' },
+                    { role: 'financial_analyst' as UserRole, label: 'Financial Analyst', email: 'analyst@transitops.com' },
                   ].map((item) => (
                     <button
                       key={item.role}
@@ -178,7 +190,7 @@ export const LoginView: React.FC = () => {
                     type="email"
                     required
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => { setLoginError(null); setEmail(e.target.value); }}
                     className={`w-full pl-9 pr-3 py-2 text-xs rounded-xl border outline-none font-medium ${
                       isDark
                         ? 'bg-[#191d26] border-[#272e3d] focus:border-[#ccff00] text-neutral-100'
@@ -195,29 +207,45 @@ export const LoginView: React.FC = () => {
                 <div className="relative">
                   <Lock className="w-4 h-4 absolute left-3 top-2.5 text-neutral-400" />
                   <input
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     required
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className={`w-full pl-9 pr-3 py-2 text-xs rounded-xl border outline-none ${
+                    onChange={(e) => { setLoginError(null); setPassword(e.target.value); }}
+                    className={`w-full pl-9 pr-10 py-2 text-xs rounded-xl border outline-none ${
                       isDark
                         ? 'bg-[#191d26] border-[#272e3d] focus:border-[#ccff00] text-neutral-100'
                         : 'bg-neutral-50 border-[#ded7ca] focus:border-[#d97706] text-neutral-900'
                     }`}
                   />
+                  <button
+                    type="button"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    onClick={() => setShowPassword((shown) => !shown)}
+                    className="absolute inset-y-0 right-0 flex items-center px-3 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
               </div>
+
+              {loginError && (
+                <p role="alert" aria-live="polite" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-300">
+                  {loginError}
+                </p>
+              )}
 
               {/* Submit Button */}
               <button
                 type="submit"
+                disabled={isSubmitting}
+                aria-busy={isSubmitting}
                 className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 mt-2 ${
                   isDark
                     ? 'bg-[#ccff00] text-black hover:bg-[#b8e600]'
                     : 'bg-[#d97706] text-white hover:bg-[#b45309]'
                 }`}
               >
-                <span>Sign In</span>
+                <span>{isSubmitting ? 'Signing in…' : 'Sign In'}</span>
                 <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
               </button>
             </form>
@@ -225,11 +253,11 @@ export const LoginView: React.FC = () => {
             {/* Quick-Demo Role Switcher buttons */}
             <div className="mt-6 pt-5 border-t border-inherit">
               <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block mb-2 text-center">
-                One-Click Quick Login by Role
+                Development-only demo accounts — configure DemoAccounts:Password in the API's .NET User Secrets
               </span>
               <div className="grid grid-cols-2 gap-2 text-[11px]">
                 <button
-                  onClick={() => handleQuickLogin('fleet_manager', 'alex.morgan@transitops.com')}
+                  onClick={() => handleQuickLogin('fleet_manager', 'manager@transitops.com')}
                   className={`p-2 rounded-lg border text-left transition-colors font-medium ${
                     isDark
                       ? 'bg-[#191d26] border-[#28303f] hover:border-[#ccff00]'
@@ -240,7 +268,7 @@ export const LoginView: React.FC = () => {
                   <div className="text-[10px] text-neutral-400">Control Tower</div>
                 </button>
                 <button
-                  onClick={() => handleQuickLogin('driver', 'sarah.chen@transitops.com')}
+                  onClick={() => handleQuickLogin('driver', 'driver@transitops.com')}
                   className={`p-2 rounded-lg border text-left transition-colors font-medium ${
                     isDark
                       ? 'bg-[#191d26] border-[#28303f] hover:border-emerald-400'
@@ -251,7 +279,7 @@ export const LoginView: React.FC = () => {
                   <div className="text-[10px] text-neutral-400">Active Delivery</div>
                 </button>
                 <button
-                  onClick={() => handleQuickLogin('safety_officer', 'marcus.vance@transitops.com')}
+                  onClick={() => handleQuickLogin('safety_officer', 'safety@transitops.com')}
                   className={`p-2 rounded-lg border text-left transition-colors font-medium ${
                     isDark
                       ? 'bg-[#191d26] border-[#28303f] hover:border-purple-400'
@@ -262,7 +290,7 @@ export const LoginView: React.FC = () => {
                   <div className="text-[10px] text-neutral-400">Compliance Watch</div>
                 </button>
                 <button
-                  onClick={() => handleQuickLogin('financial_analyst', 'priya.sharma@transitops.com')}
+                  onClick={() => handleQuickLogin('financial_analyst', 'analyst@transitops.com')}
                   className={`p-2 rounded-lg border text-left transition-colors font-medium ${
                     isDark
                       ? 'bg-[#191d26] border-[#28303f] hover:border-amber-400'
@@ -275,17 +303,6 @@ export const LoginView: React.FC = () => {
               </div>
             </div>
 
-            <div className="mt-4 text-center">
-              <span className="text-xs text-neutral-500">Need a new workspace? </span>
-              <button
-                onClick={() => setActiveView('register')}
-                className={`text-xs font-bold hover:underline ${
-                  isDark ? 'text-[#ccff00]' : 'text-[#d97706]'
-                }`}
-              >
-                Register Here
-              </button>
-            </div>
           </div>
         </div>
       </div>
@@ -299,18 +316,21 @@ export const LoginView: React.FC = () => {
 };
 
 export const RegisterView: React.FC = () => {
-  const { register, setActiveView } = useApp();
+  const { setActiveView } = useApp();
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === 'dark';
 
-  const [role, setRole] = useState<UserRole>('fleet_manager');
-  const [fullName, setFullName] = useState('Alex Morgan');
-  const [email, setEmail] = useState('alex@transitops.com');
-  const [password, setPassword] = useState('••••••••');
-  const [confirmPassword, setConfirmPassword] = useState('••••••••');
+  const role: UserRole = 'driver';
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [formError, setFormError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const roleSpecs: Record<
-    UserRole,
+    Exclude<UserRole, 'organization_admin'>,
     {
       title: string;
       badge: string;
@@ -332,7 +352,7 @@ export const RegisterView: React.FC = () => {
     driver: {
       title: 'Driver',
       badge: 'Dispatch desk',
-      desc: 'Plan routes, dispatch eligible resources, and close active deliveries with accurate trip data.',
+      desc: 'The application defines a Driver role with dispatch-desk permissions; it is not a separate Dispatcher role.',
       permissions: [
         'Create and dispatch trips',
         'Use available resources only',
@@ -368,7 +388,11 @@ export const RegisterView: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    register(fullName, email, role);
+    if (password !== confirmPassword) {
+      setFormError('Passwords do not match.');
+      return;
+    }
+    setFormError('Public registration is disabled. Contact your organization administrator.');
   };
 
   return (
@@ -380,7 +404,7 @@ export const RegisterView: React.FC = () => {
       {/* Top Bar */}
       <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
         <button
-          onClick={() => setActiveView('hero')}
+          onClick={() => setActiveView('login')}
           className="text-xs font-semibold text-neutral-500 hover:text-neutral-900 dark:hover:text-white"
         >
           ← Back to home
@@ -429,27 +453,27 @@ export const RegisterView: React.FC = () => {
           <div className="lg:col-span-5 space-y-4">
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block mb-1">
-                Step 1 · Select Your Context
+                Account role
               </span>
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
                 Create the right workspace.
               </h1>
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                Your role controls the dashboard, permitted actions, and operational data you can access.
+                Public registration creates a Driver account. Privileged roles can only be assigned by a trusted administrator.
               </p>
             </div>
 
             {/* Role Radio Cards */}
             <div className="space-y-2 pt-2">
-              {(Object.keys(roleSpecs) as UserRole[]).map((r) => {
+              {(['driver'] as UserRole[]).map((r) => {
                 const spec = roleSpecs[r];
                 const isSelected = role === r;
 
                 return (
                   <div
                     key={r}
-                    onClick={() => setRole(r)}
-                    className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                    aria-disabled="true"
+                    className={`p-3.5 rounded-xl border transition-all flex items-center justify-between ${
                       isSelected
                         ? isDark
                           ? 'bg-[#161b24] border-[#ccff00] text-neutral-100 shadow-[0_0_15px_rgba(204,255,0,0.1)]'
@@ -532,6 +556,11 @@ export const RegisterView: React.FC = () => {
               </p>
 
               <form onSubmit={handleSubmit} className="space-y-3.5">
+                {formError && (
+                  <p role="alert" className="text-xs font-semibold text-red-500">
+                    {formError}
+                  </p>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">
@@ -572,35 +601,56 @@ export const RegisterView: React.FC = () => {
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">
                       Password
                     </label>
-                    <input
-                      type="password"
-                      required
-                      placeholder="Minimum 8 characters"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className={`w-full px-3 py-2 text-xs rounded-xl border outline-none ${
-                        isDark
-                          ? 'bg-[#191d26] border-[#272e3d] focus:border-[#ccff00]'
-                          : 'bg-neutral-50 border-[#ded7ca] focus:border-[#d97706]'
-                      }`}
-                    />
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        placeholder="At least 10 characters with upper/lowercase, number, and symbol"
+                        minLength={10}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className={`w-full px-3 py-2 pr-10 text-xs rounded-xl border outline-none ${
+                          isDark
+                            ? 'bg-[#191d26] border-[#272e3d] focus:border-[#ccff00]'
+                            : 'bg-neutral-50 border-[#ded7ca] focus:border-[#d97706]'
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        onClick={() => setShowPassword((shown) => !shown)}
+                        className="absolute inset-y-0 right-0 flex items-center px-3 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">
                       Confirm Password
                     </label>
-                    <input
-                      type="password"
-                      required
-                      placeholder="Repeat your password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className={`w-full px-3 py-2 text-xs rounded-xl border outline-none ${
-                        isDark
-                          ? 'bg-[#191d26] border-[#272e3d] focus:border-[#ccff00]'
-                          : 'bg-neutral-50 border-[#ded7ca] focus:border-[#d97706]'
-                      }`}
-                    />
+                    <div className="relative">
+                      <input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        required
+                        placeholder="Repeat your password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className={`w-full px-3 py-2 pr-10 text-xs rounded-xl border outline-none ${
+                          isDark
+                            ? 'bg-[#191d26] border-[#272e3d] focus:border-[#ccff00]'
+                            : 'bg-neutral-50 border-[#ded7ca] focus:border-[#d97706]'
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                        onClick={() => setShowConfirmPassword((shown) => !shown)}
+                        className="absolute inset-y-0 right-0 flex items-center px-3 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
+                      >
+                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -616,7 +666,7 @@ export const RegisterView: React.FC = () => {
                       : 'bg-[#d97706] text-white hover:bg-[#b45309]'
                   }`}
                 >
-                  <span>Create {currentSpec.title} account</span>
+                  <span>Create Driver account</span>
                   <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
                 </button>
               </form>

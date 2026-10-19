@@ -31,6 +31,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewTripModal }) => {
 
   const navItems = [
     {
+      id: 'organization_admin' as ActiveView,
+      label: 'Organization Admin',
+      icon: Building2,
+      badge: null,
+      roles: ['organization_admin'],
+    },
+    {
       id: 'dashboard' as ActiveView,
       label: 'Dashboard',
       icon: LayoutDashboard,
@@ -67,21 +74,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewTripModal }) => {
       icon: Wrench,
       badge: inShopCount > 0 ? `${inShopCount}` : null,
       badgeColor: 'shop',
-      roles: ['fleet_manager'],
+      roles: ['fleet_manager', 'safety_officer', 'financial_analyst'],
     },
     {
       id: 'expenses' as ActiveView,
       label: 'Fuels and Expenses',
       icon: Fuel,
       badge: null,
-      roles: ['fleet_manager', 'financial_analyst', 'driver', 'safety_officer'],
+      roles: ['fleet_manager', 'financial_analyst'],
     },
     {
       id: 'reports' as ActiveView,
       label: 'Reports & ROI',
       icon: BarChart3,
       badge: null,
-      roles: ['fleet_manager', 'financial_analyst', 'safety_officer', 'driver'],
+      roles: ['fleet_manager', 'financial_analyst'],
     },
   ];
 
@@ -127,6 +134,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewTripModal }) => {
           </div>
           <p className="text-[11px] text-neutral-400 mt-1 leading-tight">
             {userRole === 'fleet_manager' && 'Assets, trips, maintenance & operational efficiency.'}
+            {userRole === 'organization_admin' && 'Create accounts and assign roles in this organization.'}
             {userRole === 'driver' && 'Trip creation, assignments, and dispatch execution.'}
             {userRole === 'safety_officer' && 'Driver compliance, license validation, safety scores.'}
             {userRole === 'financial_analyst' && 'Fuel logs, vehicle ROI, cost-per-km trends.'}
@@ -198,44 +206,46 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewTripModal }) => {
         </div>
 
         {/* Fleet Quick Status Card at sidebar bottom */}
-        <div className="mt-auto pt-4 border-t border-inherit">
-          <div
-            className={`p-3 rounded-xl text-xs ${
-              isDark ? 'bg-[#151921] border border-[#242a36]' : 'bg-white border border-[#e2dbce]'
-            }`}
-          >
-            <div className="flex items-center justify-between font-bold mb-2">
-              <span className="text-[11px] text-neutral-400 uppercase tracking-wider">Fleet Status</span>
-              <span
-                className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
-                  isDark ? 'bg-[#ccff00]/15 text-[#ccff00]' : 'bg-amber-100 text-amber-800'
-                }`}
-              >
-                Rule Engine ON
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-center text-[11px]">
-              <div
-                className={`p-1.5 rounded-lg ${
-                  isDark ? 'bg-[#1b202c]' : 'bg-neutral-50'
-                }`}
-              >
-                <div className="text-[10px] text-neutral-400">Available</div>
-                <div className="font-bold text-emerald-500">
-                  {vehicles.filter((v) => v.status === 'Available').length}
-                </div>
+        {userRole !== 'organization_admin' && (
+          <div className="mt-auto pt-4 border-t border-inherit">
+            <div
+              className={`p-3 rounded-xl text-xs ${
+                isDark ? 'bg-[#151921] border border-[#242a36]' : 'bg-white border border-[#e2dbce]'
+              }`}
+            >
+              <div className="flex items-center justify-between font-bold mb-2">
+                <span className="text-[11px] text-neutral-400 uppercase tracking-wider">Fleet Status</span>
+                <span
+                  className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                    isDark ? 'bg-[#ccff00]/15 text-[#ccff00]' : 'bg-amber-100 text-amber-800'
+                  }`}
+                >
+                  Rule Engine ON
+                </span>
               </div>
-              <div
-                className={`p-1.5 rounded-lg ${
-                  isDark ? 'bg-[#1b202c]' : 'bg-neutral-50'
-                }`}
-              >
-                <div className="text-[10px] text-neutral-400">In Shop</div>
-                <div className="font-bold text-red-500">{inShopCount}</div>
+              <div className="grid grid-cols-2 gap-2 text-center text-[11px]">
+                <div
+                  className={`p-1.5 rounded-lg ${
+                    isDark ? 'bg-[#1b202c]' : 'bg-neutral-50'
+                  }`}
+                >
+                  <div className="text-[10px] text-neutral-400">Available</div>
+                  <div className="font-bold text-emerald-500">
+                    {vehicles.filter((v) => v.status === 'Available').length}
+                  </div>
+                </div>
+                <div
+                  className={`p-1.5 rounded-lg ${
+                    isDark ? 'bg-[#1b202c]' : 'bg-neutral-50'
+                  }`}
+                >
+                  <div className="text-[10px] text-neutral-400">In Shop</div>
+                  <div className="font-bold text-red-500">{inShopCount}</div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
       </aside>
 
       {/* Mobile Bottom Navigation Bar */}

@@ -26,9 +26,18 @@ export const VehiclesView: React.FC<VehiclesViewProps> = ({
   onOpenAddVehicleModal,
   onOpenLogMaintModal,
 }) => {
-  const { vehicles, calculateVehicleROI, updateVehicleStatus, exportToCSV } = useApp();
+  const {
+    vehicles,
+    currentUser,
+    calculateVehicleROI,
+    updateVehicleStatus,
+    retireVehicle,
+    exportToCSV,
+  } = useApp();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  const canManageFleet = currentUser?.role === 'fleet_manager';
+  const canViewFinancials = currentUser?.role === 'fleet_manager' || currentUser?.role === 'financial_analyst';
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
@@ -48,7 +57,7 @@ export const VehiclesView: React.FC<VehiclesViewProps> = ({
   const handleExport = () => {
     const exportData = filteredVehicles.map((v) => {
       const roi = calculateVehicleROI(v.id);
-      return {
+      const vehicleData = {
         'Reg Number': v.registrationNumber,
         Name: v.name,
         Model: v.model,
@@ -57,13 +66,18 @@ export const VehiclesView: React.FC<VehiclesViewProps> = ({
         'Max Capacity (kg)': v.maxCapacityKg,
         'Odometer (km)': v.currentOdometerKm,
         Region: v.region,
-        'Acquisition Cost (₹)': v.acquisitionCost,
-        'Total Revenue (₹)': roi.revenue,
-        'Total Maintenance (₹)': roi.maintenanceCost,
-        'Total Fuel (₹)': roi.fuelCost,
-        'Net Profit (₹)': roi.profit,
-        'ROI (%)': `${roi.roiPercent}%`,
       };
+      return canViewFinancials
+        ? {
+            ...vehicleData,
+            'Acquisition Cost (₹)': v.acquisitionCost,
+            'Total Revenue (₹)': roi.revenue,
+            'Total Maintenance (₹)': roi.maintenanceCost,
+            'Total Fuel (₹)': roi.fuelCost,
+            'Net Profit (₹)': roi.profit,
+            'ROI (%)': `${roi.roiPercent}%`,
+          }
+        : vehicleData;
     });
     exportToCSV('transitops-vehicles-registry', exportData);
   };
@@ -131,7 +145,7 @@ export const VehiclesView: React.FC<VehiclesViewProps> = ({
             <Download className="w-3.5 h-3.5" />
             <span>Export Registry</span>
           </button>
-          <button
+          {canManageFleet && <button
             onClick={onOpenAddVehicleModal}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 ${
               isDark
@@ -141,7 +155,7 @@ export const VehiclesView: React.FC<VehiclesViewProps> = ({
           >
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
             <span>Add Vehicle</span>
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -200,6 +214,7 @@ export const VehiclesView: React.FC<VehiclesViewProps> = ({
               <option value="All">All Types</option>
               <option value="Van">Van</option>
               <option value="Truck">Truck</option>
+              <option value="Heavy Truck">Heavy Truck</option>
               <option value="Pickup">Pickup</option>
               <option value="Semi-Trailer">Semi-Trailer</option>
               <option value="Box Truck">Box Truck</option>
@@ -220,7 +235,7 @@ export const VehiclesView: React.FC<VehiclesViewProps> = ({
             <div className="text-xs font-bold text-neutral-400 uppercase tracking-wider">
               Fleet Assets ({filteredVehicles.length})
             </div>
-            <span className="text-[11px] text-neutral-400">Click row for ROI &amp; Specs</span>
+            <span className="text-[11px] text-neutral-400">Click row for {canViewFinancials ? 'ROI & ' : ''}Specs</span>
           </div>
 
           <div className="overflow-x-auto">
@@ -279,7 +294,7 @@ export const VehiclesView: React.FC<VehiclesViewProps> = ({
                         <td className="py-3 font-mono">{v.maxCapacityKg.toLocaleString()} kg</td>
                         <td className="py-3">{getStatusBadge(v.status)}</td>
                         <td className="py-3 text-right pr-4">
-                          {v.status === 'Available' && (
+                          {canManageFleet && v.status === 'Available' && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -290,7 +305,7 @@ export const VehiclesView: React.FC<VehiclesViewProps> = ({
                               Send to Shop
                             </button>
                           )}
-                          {v.status === 'In Shop' && (
+                          {canManageFleet && v.status === 'In Shop' && (
                             <span className="text-[10px] font-mono text-red-400">Locked</span>
                           )}
                           {v.status === 'On Trip' && (
@@ -359,8 +374,7 @@ export const VehiclesView: React.FC<VehiclesViewProps> = ({
                 </div>
               </div>
 
-              {/* Economic ROI Calculation Box (Section 3.5: ROI = (Revenue - (Maint + Fuel)) / Acquisition Cost) */}
-              <div
+              {canViewFinancials && <div
                 className={`p-4 rounded-xl border space-y-3 ${
                   isDark ? 'bg-[#171b24] border-[#262e3d]' : 'bg-amber-50/50 border-amber-200'
                 }`}
@@ -414,13 +428,13 @@ export const VehiclesView: React.FC<VehiclesViewProps> = ({
                 </div>
 
                 <div className="text-[10px] text-neutral-400 leading-tight pt-1">
-                  Formula: <code>(Revenue - (Maint + Fuel)) / Acquisition</code> = Net Profit {formatRupees(selectedROI.profit)}
+                  Net profit: {formatRupees(selectedROI.profit)}. ROI uses net profit divided by acquisition cost plus operating costs.
                 </div>
-              </div>
+              </div>}
 
               {/* Status change actions */}
-              <div className="pt-2 flex flex-wrap items-center gap-2">
-                {selectedVehicle.status !== 'In Shop' && selectedVehicle.status !== 'On Trip' && (
+              {canManageFleet && <div className="pt-2 flex flex-wrap items-center gap-2">
+                {selectedVehicle.status !== 'In Shop' && selectedVehicle.status !== 'On Trip' && selectedVehicle.status !== 'Retired' && (
                   <button
                     onClick={() => onOpenLogMaintModal(selectedVehicle.id)}
                     className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-600 hover:bg-red-500 text-white flex items-center gap-1.5 transition-colors"
@@ -440,13 +454,13 @@ export const VehiclesView: React.FC<VehiclesViewProps> = ({
                 )}
                 {selectedVehicle.status !== 'Retired' && selectedVehicle.status !== 'On Trip' && (
                   <button
-                    onClick={() => updateVehicleStatus(selectedVehicle.id, 'Retired')}
+                    onClick={() => retireVehicle(selectedVehicle.id)}
                     className="px-3 py-1.5 rounded-lg text-xs font-semibold border text-neutral-400 hover:text-neutral-100 transition-colors"
                   >
                     Decommission Asset
                   </button>
                 )}
-              </div>
+              </div>}
             </div>
           ) : (
             <div

@@ -19,9 +19,11 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useTheme } from '../../context/ThemeContext';
+import { api } from '../../services/api';
 
 export const ReportsView: React.FC = () => {
   const {
+    currentUser,
     vehicles,
     trips,
     expenses,
@@ -35,13 +37,16 @@ export const ReportsView: React.FC = () => {
   const [search, setSearch] = useState('');
   const [vehicleTypeFilter, setVehicleTypeFilter] = useState('All');
   const [sortBy, setSortBy] = useState<'roi' | 'revenue' | 'profit' | 'cost'>('roi');
+  const [isExportingLedger, setIsExportingLedger] = useState(false);
+  const [isExportingFleetRoi, setIsExportingFleetRoi] = useState(false);
+  const [pdfExportError, setPdfExportError] = useState<string | null>(null);
 
   // Aggregated Financials
   const completedTrips = trips.filter((t) => t.status === 'Completed');
   const totalRevenue = completedTrips.reduce((acc, t) => acc + t.revenue, 0);
 
   const totalFuelCost = expenses
-    .filter((e) => e.type === 'Fuel' || e.category === 'Fuel')
+    .filter((e) => e.type === 'Fuel')
     .reduce((acc, e) => acc + (e.cost || e.amount || 0), 0);
 
   const totalMaintenanceCost = maintenanceRecords.reduce(
@@ -50,14 +55,14 @@ export const ReportsView: React.FC = () => {
   );
 
   const totalTollsAndMisc = expenses
-    .filter((e) => e.type !== 'Fuel' && e.category !== 'Fuel')
+    .filter((e) => e.type !== 'Fuel')
     .reduce((acc, e) => acc + (e.cost || e.amount || 0), 0);
 
   const totalOperatingCost = totalFuelCost + totalMaintenanceCost + totalTollsAndMisc;
   const netOperatingProfit = totalRevenue - totalOperatingCost;
 
   const totalAcquisitionCost = vehicles.reduce(
-    (acc, v) => acc + v.acquisitionCost,
+    (acc, v) => acc + (v.acquisitionCost ?? 0),
     0
   );
   const fleetOverallROI =
@@ -73,11 +78,11 @@ export const ReportsView: React.FC = () => {
   const avgCostPerKm =
     totalCompletedDist > 0
       ? (totalOperatingCost / totalCompletedDist).toFixed(2)
-      : '1.45';
+      : '0.00';
   const avgRevenuePerKm =
     totalCompletedDist > 0
       ? (totalRevenue / totalCompletedDist).toFixed(2)
-      : '3.80';
+      : '0.00';
 
   // Cost proportions
   const fuelPercent =
@@ -166,6 +171,46 @@ export const ReportsView: React.FC = () => {
     exportToCSV('transitops-route-performance-and-costs', data);
   };
 
+  const handleExportFinancialLedgerPdf = async () => {
+    setPdfExportError(null);
+    setIsExportingLedger(true);
+    try {
+      const pdf = await api.reports.exportFinancialLedgerPdf();
+      const url = URL.createObjectURL(pdf);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `transitops-financial-ledger-${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      setPdfExportError(error instanceof Error ? error.message : 'Could not generate the financial ledger PDF.');
+    } finally {
+      setIsExportingLedger(false);
+    }
+  };
+
+  const handleExportFleetRoiPdf = async () => {
+    setPdfExportError(null);
+    setIsExportingFleetRoi(true);
+    try {
+      const pdf = await api.reports.exportFleetRoiPdf();
+      const url = URL.createObjectURL(pdf);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `transitops-fleet-roi-${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      setPdfExportError(error instanceof Error ? error.message : 'Could not generate the fleet ROI PDF.');
+    } finally {
+      setIsExportingFleetRoi(false);
+    }
+  };
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
@@ -209,8 +254,45 @@ export const ReportsView: React.FC = () => {
             <Download className="w-3.5 h-3.5 stroke-[2.5]" />
             <span>Export ROI Matrix</span>
           </button>
+          {currentUser?.role === 'financial_analyst' && (
+            <button
+              onClick={() => void handleExportFinancialLedgerPdf()}
+              disabled={isExportingLedger}
+              className={`px-3 py-2 rounded-xl text-xs font-semibold border flex items-center gap-1.5 transition-colors disabled:opacity-50 ${
+                isDark
+                  ? 'bg-[#151921] border-[#262d3a] hover:bg-[#1d232f] text-neutral-200'
+                  : 'bg-white border-[#ded7ca] hover:bg-neutral-100 text-neutral-800'
+              }`}
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>{isExportingLedger ? 'Generating PDF…' : 'Financial Ledger PDF'}</span>
+            </button>
+          )}
+          {currentUser?.role === 'fleet_manager' && (
+            <button
+              onClick={() => void handleExportFleetRoiPdf()}
+              disabled={isExportingFleetRoi}
+              className={`px-3 py-2 rounded-xl text-xs font-semibold border flex items-center gap-1.5 transition-colors disabled:opacity-50 ${
+                isDark
+                  ? 'bg-[#151921] border-[#262d3a] hover:bg-[#1d232f] text-neutral-200'
+                  : 'bg-white border-[#ded7ca] hover:bg-neutral-100 text-neutral-800'
+              }`}
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>{isExportingFleetRoi ? 'Generating PDF…' : 'Fleet ROI PDF'}</span>
+            </button>
+          )}
         </div>
       </div>
+      {pdfExportError && (
+        <p role="alert" className={`rounded-xl border px-4 py-3 text-xs ${
+          isDark
+            ? 'border-red-500/30 bg-red-500/10 text-red-300'
+            : 'border-red-200 bg-red-50 text-red-800'
+        }`}>
+          {pdfExportError}
+        </p>
+      )}
 
       {/* Top 4 Financial Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">

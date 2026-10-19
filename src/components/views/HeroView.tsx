@@ -19,7 +19,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { UserRole } from '../../types';
 
 export const HeroView: React.FC = () => {
-  const { setActiveView, setUserRole, login, currentUser } = useApp();
+  const { setActiveView, currentUser } = useApp();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
@@ -59,10 +59,7 @@ export const HeroView: React.FC = () => {
     { text: 'spreadsheet.', isAccent: true },
   ];
 
-  const handleRoleSelect = (role: UserRole) => {
-    setUserRole(role);
-    login(`demo.${role}@transitops.com`, role);
-  };
+  const handleRoleSelect = (_role: UserRole) => setActiveView('login');
 
   return (
     <div className="min-h-screen pb-20">
@@ -187,10 +184,7 @@ export const HeroView: React.FC = () => {
               >
                 <button
                   onClick={() => {
-                    if (!currentUser) {
-                      login('alex.morgan@transitops.com', 'fleet_manager');
-                    }
-                    setActiveView('dashboard');
+                    setActiveView(currentUser ? 'dashboard' : 'login');
                   }}
                   className={`px-6 py-3 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center gap-2 ${
                     isDark
@@ -916,7 +910,7 @@ export const HeroView: React.FC = () => {
               <motion.button
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
-                onClick={() => setActiveView('register')}
+                onClick={() => setActiveView('login')}
                 className={`px-6 py-3 rounded-xl text-xs sm:text-sm font-bold shadow-md transition-all ${
                   isDark
                     ? 'bg-[#ccff00] text-black hover:bg-[#bbf000]'

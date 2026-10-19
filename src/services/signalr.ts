@@ -4,70 +4,42 @@ type EventCallback = (data: any) => void;
 
 class RealtimeService {
   private hubConnection: signalR.HubConnection | null = null;
-  private eventSource: EventSource | null = null;
   private listeners: Map<string, Set<EventCallback>> = new Map();
 
   public async connect() {
-    if (this.hubConnection || this.eventSource) return;
+    if (this.hubConnection) return;
 
-    // 1. Try SignalR connection
+    const connection = new signalR.HubConnectionBuilder()
+      .withUrl('/hubs/transitops', {
+        skipNegotiation: false,
+        transport:
+          signalR.HttpTransportType.ServerSentEvents |
+          signalR.HttpTransportType.LongPolling,
+      })
+      .configureLogging(signalR.LogLevel.None)
+      .withAutomaticReconnect()
+      .build();
+    this.hubConnection = connection;
+
+    connection.on('ReceiveTripDispatched', (data) => this.emit('trip_dispatched', data));
+    connection.on('ReceiveTripCompleted', (data) => this.emit('trip_completed', data));
+    connection.on('ReceiveVehicleStatusChanged', (id, status) =>
+      this.emit('vehicle_status', { vehicleId: id, status })
+    );
+    connection.on('ReceiveDriverStatusChanged', (id, status) =>
+      this.emit('driver_status', { driverId: id, status })
+    );
+    connection.on('ReceiveMaintenanceUpdated', (data) => this.emit('maintenance_updated', data));
+    connection.on('ReceiveExpenseUpdated', (data) => this.emit('expense_updated', data));
+    connection.on('ReceiveNotification', (notif) => this.emit('notification', notif));
+
     try {
-      this.hubConnection = new signalR.HubConnectionBuilder()
-        .withUrl('/hubs/transitops', {
-          skipNegotiation: false,
-          transport:
-            signalR.HttpTransportType.ServerSentEvents |
-            signalR.HttpTransportType.LongPolling,
-        })
-        .configureLogging(signalR.LogLevel.None)
-        .withAutomaticReconnect()
-        .build();
-
-      this.hubConnection.on('ReceiveTripDispatched', (data) => this.emit('trip_dispatched', data));
-      this.hubConnection.on('ReceiveTripCompleted', (data) => this.emit('trip_completed', data));
-      this.hubConnection.on('ReceiveVehicleStatusChanged', (id, status) =>
-        this.emit('vehicle_status', { vehicleId: id, status })
-      );
-      this.hubConnection.on('ReceiveNotification', (notif) => this.emit('notification', notif));
-
-      await this.hubConnection.start();
+      await connection.start();
       console.log('[TransitOps] SignalR real-time hub connected');
-      return;
-    } catch {
-      // 2. Fallback to Server-Sent Events (SSE)
-      this.connectSSE();
-    }
-  }
-
-  private connectSSE() {
-    try {
-      this.eventSource = new EventSource('/api/events');
-
-      this.eventSource.addEventListener('trip_dispatched', (e: MessageEvent) => {
-        try {
-          this.emit('trip_dispatched', JSON.parse(e.data));
-        } catch { }
-      });
-
-      this.eventSource.addEventListener('trip_completed', (e: MessageEvent) => {
-        try {
-          this.emit('trip_completed', JSON.parse(e.data));
-        } catch { }
-      });
-
-      this.eventSource.addEventListener('vehicle_status', (e: MessageEvent) => {
-        try {
-          this.emit('vehicle_status', JSON.parse(e.data));
-        } catch { }
-      });
-
-      this.eventSource.addEventListener('notification', (e: MessageEvent) => {
-        try {
-          this.emit('notification', JSON.parse(e.data));
-        } catch { }
-      });
-    } catch {
-      // Real-time fallback silent
+    } catch (error) {
+      this.hubConnection = null;
+      await connection.stop();
+      console.warn('[TransitOps] SignalR connection failed:', error);
     }
   }
 
@@ -96,14 +68,10 @@ class RealtimeService {
   }
 
   public disconnect() {
-    if (this.hubConnection) {
-      this.hubConnection.stop();
-      this.hubConnection = null;
-    }
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = null;
-    }
+    if (!this.hubConnection) return;
+    const connection = this.hubConnection;
+    this.hubConnection = null;
+    void connection.stop();
   }
 }
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { AppProvider, useApp } from './context/AppContext';
 import { SplashScreen } from './components/SplashScreen';
@@ -14,8 +14,8 @@ import { LogMaintenanceModal } from './components/modals/LogMaintenanceModal';
 import { AddDriverModal } from './components/modals/AddDriverModal';
 
 // Views
+import { LoginView } from './components/views/AuthViews';
 import { HeroView } from './components/views/HeroView';
-import { LoginView, RegisterView } from './components/views/AuthViews';
 import { DashboardView } from './components/views/DashboardView';
 import { VehiclesView } from './components/views/VehiclesView';
 import { TripsView } from './components/views/TripsView';
@@ -24,12 +24,29 @@ import { MaintenanceView } from './components/views/MaintenanceView';
 import { ExpensesView } from './components/views/ExpensesView';
 import { ReportsView } from './components/views/ReportsView';
 import { AnalyticsView } from './components/views/AnalyticsView';
-import { Trip } from './types';
+import { OrganizationAdminDashboard } from './components/views/OrganizationAdminDashboard';
+import { Trip, UserRole } from './types';
 
 const MainLayout: React.FC = () => {
-  const { activeView, isSplashActive, dismissSplash, currentUser } = useApp();
+  const { activeView, setActiveView, isSplashActive, dismissSplash, currentUser } = useApp();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  const allowedViews: Record<UserRole, string[]> = {
+    organization_admin: ['organization_admin'],
+    fleet_manager: ['dashboard', 'vehicles', 'drivers', 'trips', 'maintenance', 'expenses', 'reports', 'analytics'],
+    driver: ['dashboard', 'vehicles', 'trips'],
+    safety_officer: ['dashboard', 'vehicles', 'drivers', 'maintenance'],
+    financial_analyst: ['dashboard', 'vehicles', 'trips', 'maintenance', 'expenses', 'reports', 'analytics'],
+  };
+  const view = currentUser
+    ? allowedViews[currentUser.role].includes(activeView)
+      ? activeView
+      : currentUser.role === 'organization_admin' ? 'organization_admin' : 'dashboard'
+    : activeView === 'hero' ? 'hero' : 'login';
+
+  useEffect(() => {
+    if (view !== activeView) setActiveView(view as typeof activeView);
+  }, [activeView, setActiveView, view]);
 
   // Modal States
   const [isNewTripOpen, setIsNewTripOpen] = useState(false);
@@ -44,8 +61,8 @@ const MainLayout: React.FC = () => {
     setIsLogMaintOpen(true);
   };
 
-  const isAuthOrHero =
-    activeView === 'hero' || activeView === 'login' || activeView === 'register';
+  const isLogin = view === 'login';
+  const isPublicView = view === 'hero' || isLogin;
 
   return (
     <>
@@ -58,24 +75,22 @@ const MainLayout: React.FC = () => {
 
       <div
         className={`${
-          isAuthOrHero ? 'min-h-screen' : 'h-screen overflow-hidden'
+          isLogin ? 'min-h-screen' : 'h-screen overflow-hidden'
         } flex flex-col font-sans transition-colors duration-200 ${
           isDark
             ? 'bg-[#0c0e12] text-neutral-100 selection:bg-[#ccff00] selection:text-black'
             : 'bg-[#faf8f4] text-neutral-900 selection:bg-[#d97706] selection:text-white'
         }`}
       >
-        {/* Render Navbar only on app views or hero */}
-        {activeView !== 'login' && activeView !== 'register' && (
+        {/* Render Navbar only for authenticated app views */}
+        {!isLogin && (
           <Navbar onOpenNewTripModal={() => setIsNewTripOpen(true)} />
         )}
 
         {/* Dynamic Body Layout */}
-        {isAuthOrHero ? (
+        {isPublicView ? (
           <main className="flex-1 overflow-y-auto">
-            {activeView === 'hero' && <HeroView />}
-            {activeView === 'login' && <LoginView />}
-            {activeView === 'register' && <RegisterView />}
+            {view === 'hero' ? <HeroView /> : <LoginView />}
           </main>
         ) : (
           <div className="flex-1 flex overflow-hidden min-h-0">
@@ -84,7 +99,7 @@ const MainLayout: React.FC = () => {
 
             {/* Main Scrollable Content */}
             <main className="flex-1 overflow-y-auto h-full pb-20 md:pb-8">
-              {activeView === 'dashboard' && (
+              {view === 'dashboard' && (
                 <DashboardView
                   onOpenNewTripModal={() => setIsNewTripOpen(true)}
                   onOpenAddVehicleModal={() => setIsAddVehicleOpen(true)}
@@ -93,33 +108,34 @@ const MainLayout: React.FC = () => {
                   onOpenCompleteTripModal={(trip) => setTripToComplete(trip)}
                 />
               )}
-              {activeView === 'vehicles' && (
+              {view === 'vehicles' && (
                 <VehiclesView
                   onOpenAddVehicleModal={() => setIsAddVehicleOpen(true)}
                   onOpenLogMaintModal={handleOpenLogMaintenance}
                 />
               )}
-              {activeView === 'trips' && (
+              {view === 'trips' && (
                 <TripsView
                   onOpenNewTripModal={() => setIsNewTripOpen(true)}
                   onOpenCompleteTripModal={(trip) => setTripToComplete(trip)}
                 />
               )}
-              {activeView === 'drivers' && (
+              {view === 'drivers' && (
                 <DriversView onOpenAddDriverModal={() => setIsAddDriverOpen(true)} />
               )}
-              {activeView === 'maintenance' && (
+              {view === 'maintenance' && (
                 <MaintenanceView onOpenLogMaintModal={() => handleOpenLogMaintenance()} />
               )}
-              {activeView === 'expenses' && (
+              {view === 'expenses' && (
                 <ExpensesView onOpenLogMaintModal={() => handleOpenLogMaintenance()} />
               )}
-              {activeView === 'reports' && (
+              {view === 'reports' && (
                 <ReportsView />
               )}
-              {activeView === 'analytics' && (
+              {view === 'analytics' && (
                 <ReportsView />
               )}
+              {view === 'organization_admin' && <OrganizationAdminDashboard />}
             </main>
           </div>
         )}

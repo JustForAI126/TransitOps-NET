@@ -1,0 +1,96 @@
+# TransitOps Access Model and KPI Definitions
+
+This document records the current API authorization and the dashboard formulas. UI visibility is only a convenience; the ASP.NET endpoints enforce the listed role restrictions and tenant filters.
+
+## Role names and assignment
+
+The application defines `OrganizationAdmin`, `FleetManager`, `Driver`, `SafetyOfficer`, and `FinancialAnalyst`. There is no separate `Dispatcher` role. Public registration is disabled. Organization Admins create tenant-scoped operational accounts but cannot create another Organization Admin.
+
+The initial production Organization Admin provisioning flow after a software purchase is not connected to a billing provider. Local Development seeds a demo Organization Admin for exercising the dashboard; production onboarding must only provision this role through a trusted purchase fulfillment operation.
+
+**Driver/Dispatcher mismatch and required design decision:** the original brief names “Driver or Dispatcher” as alternatives. This application defines `Driver`, and grants that role trip creation, dispatch, completion, and cancellation endpoints. Admin-created Driver accounts now have linked tenant-scoped Driver profiles, but trip authorization is still tenant-wide rather than restricted to the linked driver's trips. Before production use, decide whether this role is intended to be a dispatcher or enforce linked-driver ownership on trip reads and mutations. Do not interpret `Driver` as a separate `Dispatcher` role.
+
+## Current permission matrix
+
+`V` = view, `C` = create, `U` = update, `R` = retire (soft-delete), `X` = export, `Dsp` = dispatch, `Cmp` = complete, `Can` = cancel, `Adm` = administer. `—` means no corresponding endpoint is granted. A blank rule is not inferred as a product requirement.
+
+| Resource / action | Organization Admin | Fleet Manager | Driver | Safety Officer | Financial Analyst | Notes |
+|---|---:|---:|---:|---:|---:|---|
+| Vehicles: view | — | V | V | V | V | Queries are tenant-scoped. Acquisition cost and revenue fields are redacted for Driver and Safety Officer. |
+| Vehicles: create/update | — | C/U | — | — | — | Fleet Manager only. |
+| Vehicles: delete/retire | — | R | — | — | — | `DELETE /vehicles/{id}` changes status to Retired; it does not physically delete history. |
+| Drivers: view | — | V | — | V | — | Fleet Manager and Safety Officer can view profile/contact/license data. |
+| Drivers: create | — | C | — | — | — | Fleet Manager only. |
+| Drivers: update/suspend/remind | — | U | — | U | — | Fleet Manager and Safety Officer; current update endpoint permits profile edits to either role. |
+| Trips: view | — | V | V | — | V | Tenant-scoped. Financial values are not returned to Driver. |
+| Trips: create/dispatch/complete/cancel | — | C/Dsp/Cmp/Can | C/Dsp/Cmp/Can | — | — | Current Driver access is tenant-wide; see the Driver/Dispatcher decision above. |
+| Maintenance: view | — | V | — | V | V | Financial Analyst read access supports cost analysis; writes remain Fleet Manager only. |
+| Maintenance: create/close | — | C/U | — | — | — | Fleet Manager only. |
+| Expenses: view/create/delete | — | V/C/D | — | — | V/C/D | Financial Analyst and Fleet Manager. |
+| Fleet/driver/safety/financial KPIs | — | Fleet | Driver | Safety | Financial | Each KPI endpoint is role-protected and tenant-scoped. |
+| Trip CSV export | — | X | — | — | X | Financial fields are provided only to Fleet Manager and Financial Analyst. |
+| Financial ledger PDF export | — | — | — | — | X | Financial Analyst only. |
+| Trip PDF manifest | — | X | X | — | — | Fleet Manager and Driver. |
+| Fleet vehicle ROI PDF | — | X | — | — | — | Fleet Manager only; uses completed-trip revenue and maintenance/fuel costs per vehicle. |
+| Organization account list/create operational accounts | C | — | — | — | — | Organization Admin only; tenant-scoped. Driver account creation also creates a linked Driver profile. |
+| Create or promote Organization Admin | — | — | — | — | — | Not available through the public API or Organization Admin dashboard; requires trusted purchase provisioning. |
+| Hangfire dashboard | — | Fleet Manager | — | — | — | Restricted to authenticated Fleet Managers. |
+
+The Safety Officer can currently update driver details and status, while Fleet Managers can modify driver records and vehicle operations. Whether Safety Officers should be read-only or allowed to change non-safety fields is a product-policy decision. Similarly, permission rules for individual trip ownership remain unresolved as stated above.
+
+## Tenant and sensitive-data boundaries
+
+- Every protected API requires an authenticated user with a `tenant_id` claim. Resource queries and writes include that tenant identifier.
+- The frontend does not store bearer tokens in local storage. Authentication uses an HttpOnly JWT cookie.
+- Fleet Manager and Financial Analyst are the only roles whose vehicle and trip responses include financial fields. The vehicle UI also hides financial detail and financial export columns from other roles.
+- PostgreSQL credentials remain server-side. The RLS scripts intentionally enable RLS without creating permissive public policies; they are not a substitute for the API tenant filters.
+- Vehicle registration numbers and driver email/license numbers are normalized before saving and have unique database indexes. The current uniqueness scope is global, not tenant-local.
+- Retired vehicles remain in storage and historical records. Active trip or maintenance records prevent retirement.
+
+## Fleet dashboard KPIs
+
+The dashboard uses persisted API records. Vehicle type, status, and region filters apply to vehicle counts and to trips assigned to the filtered vehicles. The Drivers On Duty count remains fleet-wide because driver profiles are not associated with regions or vehicle types.
+
+| KPI | Formula / definition |
+|---|---|
+| Active Vehicles | Count of vehicles whose status is `OnTrip` (`On Trip` in the UI). |
+| Available Vehicles | Count of vehicles whose status is `Available`. |
+| Vehicles in Maintenance | Count of vehicles whose status is `InShop` (`In Shop` in the UI). |
+| Active Trips | Count of trips with status `Dispatched`, limited to trips whose assigned vehicle matches active dashboard filters. |
+| Pending Trips | Count of trips with status `Draft`, limited to trips whose assigned vehicle matches active dashboard filters. |
+| Drivers On Duty | Count of driver records with status `OnDuty` (`On Duty` in the UI). It is not filtered by vehicle type/status/region. |
+| Fleet Utilization | `OnTrip vehicles / non-retired vehicles × 100`, rounded to one decimal place. The result is `0` when there are no non-retired vehicles. Vehicle filters define the numerator and denominator. |
+
+Retired vehicles are excluded from the utilization denominator. Empty filtered sets produce zero counts and an explicit empty dispatch state. The active-dispatch panel displays saved trip routes and does not claim to show GPS positions; the model has no live location coordinates.
+
+## Financial formulas
+
+Financial KPI calculations are performed by the backend from tenant-persisted data. No diesel-price or fuel-consumption estimates are substituted for missing expense records.
+
+| KPI | Formula / definition |
+|---|---|
+| Fuel Spend | Sum of recorded expenses where type is `Fuel`. |
+| Maintenance Spend | Sum of recorded maintenance costs. |
+| Other Expenses | Sum of recorded expenses whose type is not `Fuel`. |
+| Total OPEX | Maintenance Spend + Fuel Spend + Other Expenses. |
+| Gross Revenue | Sum of revenue from `Completed` trips only. |
+| Net Profit | Gross Revenue − Total OPEX. |
+| Net Margin (%) | `Net Profit / Gross Revenue × 100`, or zero when gross revenue is zero; rounded to one decimal place. |
+| Cost per km | `Total OPEX / sum of planned distance for Completed trips`, or zero when completed planned distance is zero; rounded to two decimals. |
+
+No reporting-period filter is currently defined; financial totals cover all persisted records in the tenant. The Driver KPI `OnTimeDepartureRate` is `null`: the model has no scheduled departure/due-time field, so an on-time formula is intentionally not invented.
+
+## Remaining product decisions
+
+- Whether the `Driver` role should instead be a distinct `Dispatcher`, or must only operate trips assigned to a linked driver profile.
+- Whether Financial Analysts may view more than aggregate maintenance costs.
+- Whether global uniqueness for vehicle registrations and driver email/license values is intended, or should be tenant-local.
+- Whether dashboard financial totals need a reporting period, and what date basis to use.
+- Whether vehicle utilization should exclude vehicles under maintenance in addition to retired vehicles.
+
+## Vehicle ROI
+
+The vehicle ROI matrix uses completed-trip revenue and subtracts each vehicle's maintenance and fuel expenses to calculate operating profit. ROI is `operating profit / acquisition cost × 100`; acquisition cost is the invested-capital denominator, not an operating expense. The Fleet Manager PDF uses the same per-vehicle calculation. Demo historical trip revenue uses ₹38 per tonne-kilometre (`distance km × cargo kg / 1,000 × ₹38`); seed runs recompute these demo trip amounts so an existing development database receives the corrected values.
+
+Development sample records are owned by the `demo_tenant` and are visible to all accounts in that organization, including operational accounts created by its demo Organization Admin. Data isolation is tenant-based, not based on email addresses or role. A fresh production organization must be provisioned with a distinct tenant; the purchase-based provisioning integration is not yet implemented.
+- Whether driver-on-duty counts should be scoped by region/type after driver-to-fleet assignment is modeled.

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, UserPlus, AlertCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useTheme } from '../../context/ThemeContext';
-import { DriverStatus } from '../../types';
+import { DriverStatus, INDIAN_LICENSE_CATEGORIES } from '../../types';
 
 interface AddDriverModalProps {
   isOpen: boolean;
@@ -16,7 +16,7 @@ export const AddDriverModal: React.FC<AddDriverModalProps> = ({ isOpen, onClose 
 
   const [name, setName] = useState('');
   const [licenseNumber, setLicenseNumber] = useState('');
-  const [licenseCategory, setLicenseCategory] = useState('Heavy Commercial (HCV)');
+  const [licenseCategory, setLicenseCategory] = useState<string>('HGMV');
   const [licenseExpiryDate, setLicenseExpiryDate] = useState('2028-06-30');
   const [contactNumber, setContactNumber] = useState('+91 98');
   const [safetyScore, setSafetyScore] = useState<number>(95);
@@ -87,7 +87,11 @@ export const AddDriverModal: React.FC<AddDriverModalProps> = ({ isOpen, onClose 
 
         <form onSubmit={handleSubmit} className="p-5 space-y-3.5">
           {error && (
-            <div className="p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-xs flex items-center gap-2">
+            <div className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
+              isDark
+                ? 'bg-red-500/15 border-red-500/30 text-red-300'
+                : 'bg-red-50 border-red-200 text-red-800'
+            }`}>
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
             </div>
@@ -102,7 +106,7 @@ export const AddDriverModal: React.FC<AddDriverModalProps> = ({ isOpen, onClose 
               required
               placeholder="e.g. Vikram Malhotra"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => { setError(null); setName(e.target.value); }}
               className={`w-full px-3 py-2 text-xs rounded-xl border outline-none font-medium ${
                 isDark
                   ? 'bg-[#191d26] border-[#272e3d] focus:border-[#ccff00]'
@@ -121,7 +125,7 @@ export const AddDriverModal: React.FC<AddDriverModalProps> = ({ isOpen, onClose 
                 required
                 placeholder="e.g. MH-12-2024009182"
                 value={licenseNumber}
-                onChange={(e) => setLicenseNumber(e.target.value.toUpperCase())}
+                onChange={(e) => { setError(null); setLicenseNumber(e.target.value.toUpperCase()); }}
                 className={`w-full px-3 py-2 text-xs font-mono font-semibold rounded-xl border outline-none ${
                   isDark
                     ? 'bg-[#191d26] border-[#272e3d] focus:border-[#ccff00]'
@@ -135,16 +139,16 @@ export const AddDriverModal: React.FC<AddDriverModalProps> = ({ isOpen, onClose 
               </label>
               <select
                 value={licenseCategory}
-                onChange={(e) => setLicenseCategory(e.target.value)}
+                onChange={(e) => { setError(null); setLicenseCategory(e.target.value); }}
                 className={`w-full px-3 py-2 text-xs rounded-xl border outline-none font-medium cursor-pointer ${
                   isDark
                     ? 'bg-[#191d26] border-[#272e3d] focus:border-[#ccff00] text-neutral-200'
                     : 'bg-neutral-50 border-[#ded7ca] focus:border-[#d97706] text-neutral-800'
                 }`}
               >
-                <option value="Heavy Commercial (HCV)">Heavy Commercial (HCV)</option>
-                <option value="Medium Goods (MGV)">Medium Goods (MGV)</option>
-                <option value="Light Motor Vehicle (LMV)">Light Motor Vehicle (LMV)</option>
+                {INDIAN_LICENSE_CATEGORIES.map((category) => (
+                  <option key={category.value} value={category.value}>{category.label}</option>
+                ))}
               </select>
             </div>
           </div>
@@ -158,7 +162,7 @@ export const AddDriverModal: React.FC<AddDriverModalProps> = ({ isOpen, onClose 
                 type="date"
                 required
                 value={licenseExpiryDate}
-                onChange={(e) => setLicenseExpiryDate(e.target.value)}
+                onChange={(e) => { setError(null); setLicenseExpiryDate(e.target.value); }}
                 className={`w-full px-3 py-2 text-xs font-mono rounded-xl border outline-none ${
                   isDark
                     ? 'bg-[#191d26] border-[#272e3d] focus:border-[#ccff00]'
@@ -176,7 +180,7 @@ export const AddDriverModal: React.FC<AddDriverModalProps> = ({ isOpen, onClose 
                 max="100"
                 required
                 value={safetyScore}
-                onChange={(e) => setSafetyScore(Number(e.target.value))}
+                onChange={(e) => { setError(null); setSafetyScore(Number(e.target.value)); }}
                 className={`w-full px-3 py-2 text-xs font-semibold rounded-xl border outline-none ${
                   isDark
                     ? 'bg-[#191d26] border-[#272e3d] focus:border-[#ccff00]'
@@ -196,7 +200,7 @@ export const AddDriverModal: React.FC<AddDriverModalProps> = ({ isOpen, onClose 
                 required
                 placeholder="+91 98200 00000"
                 value={contactNumber}
-                onChange={(e) => setContactNumber(e.target.value)}
+                onChange={(e) => { setError(null); setContactNumber(e.target.value); }}
                 className={`w-full px-3 py-2 text-xs rounded-xl border outline-none ${
                   isDark
                     ? 'bg-[#191d26] border-[#272e3d] focus:border-[#ccff00]'
@@ -210,7 +214,7 @@ export const AddDriverModal: React.FC<AddDriverModalProps> = ({ isOpen, onClose 
               </label>
               <select
                 value={status}
-                onChange={(e) => setStatus(e.target.value as DriverStatus)}
+                onChange={(e) => { setError(null); setStatus(e.target.value as DriverStatus); }}
                 className={`w-full px-3 py-2 text-xs rounded-xl border outline-none font-medium cursor-pointer ${
                   isDark
                     ? 'bg-[#191d26] border-[#272e3d] focus:border-[#ccff00] text-neutral-200'

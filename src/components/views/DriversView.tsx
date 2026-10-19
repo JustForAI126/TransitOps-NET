@@ -22,12 +22,14 @@ interface DriversViewProps {
 export const DriversView: React.FC<DriversViewProps> = ({ onOpenAddDriverModal }) => {
   const {
     drivers,
+    currentUser,
     toggleDriverSuspension,
     sendLicenseReminderEmail,
     exportToCSV,
   } = useApp();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  const canCreateDriver = currentUser?.role === 'fleet_manager';
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
@@ -167,7 +169,7 @@ export const DriversView: React.FC<DriversViewProps> = ({ onOpenAddDriverModal }
             <Download className="w-3.5 h-3.5" />
             <span>Export Roster</span>
           </button>
-          <button
+          {canCreateDriver && <button
             onClick={onOpenAddDriverModal}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 ${
               isDark
@@ -177,7 +179,7 @@ export const DriversView: React.FC<DriversViewProps> = ({ onOpenAddDriverModal }
           >
             <UserPlus className="w-3.5 h-3.5 stroke-[2.5]" />
             <span>Add Driver</span>
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -270,13 +272,13 @@ export const DriversView: React.FC<DriversViewProps> = ({ onOpenAddDriverModal }
                       <Users className="w-10 h-10 mx-auto opacity-40 text-amber-500" />
                       <p className="font-bold text-sm">No Drivers Registered</p>
                       <p className="text-xs">Your compliance roster is empty. Register your commercial operators to begin dispatching.</p>
-                      <button
+                      {canCreateDriver && <button
                         onClick={onOpenAddDriverModal}
                         className="mt-2 px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-500 hover:bg-amber-600 text-black inline-flex items-center gap-1.5 transition-colors"
                       >
                         <UserPlus className="w-3.5 h-3.5" />
                         <span>Register First Driver</span>
-                      </button>
+                      </button>}
                     </div>
                   </td>
                 </tr>

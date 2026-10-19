@@ -1,8 +1,27 @@
+# Node.js / frontend
 node_modules/
 build/
 dist/
 coverage/
-.DS_Store
-*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# .NET build and test output
+**/bin/
+**/obj/
+TestResults/
+*.trx
+*.user
+*.suo
+.vs/
+
+# Local environment configuration (keep the non-secret template)
 .env*
 !.env.example
+
+# Logs and operating-system files
+*.log
+.DS_Store
+Thumbs.db
+Desktop.ini

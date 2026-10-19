@@ -9,7 +9,6 @@ import {
   ShieldCheck,
   Building2,
   Sparkles,
-  HelpCircle,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -25,7 +24,7 @@ export const GettingStartedGuide: React.FC<GettingStartedGuideProps> = ({
   onOpenAddDriverModal,
   onOpenNewTripModal,
 }) => {
-  const { currentUser, vehicles, drivers, trips, addNotification, loadSampleWorkspaceData } = useApp();
+  const { currentUser, vehicles, drivers, trips } = useApp();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
@@ -264,35 +263,15 @@ export const GettingStartedGuide: React.FC<GettingStartedGuideProps> = ({
         </div>
       </div>
 
-      {/* Sample Data Quick Loader for Testing */}
-      <div
-        className={`mt-6 p-4 rounded-xl border flex flex-col sm:flex-row items-center justify-between gap-3 text-xs ${
-          isDark ? 'bg-neutral-800/40 border-neutral-700/60' : 'bg-neutral-50 border-neutral-200'
-        }`}
-      >
-        <div className="flex items-center gap-2.5">
-          <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
-          <span className="text-neutral-600 dark:text-neutral-300">
-            Want to test-drive TransitOps features before adding real assets?
-          </span>
-        </div>
-        <button
-          onClick={loadSampleWorkspaceData}
-          className="px-3.5 py-1.5 rounded-lg font-bold text-xs bg-amber-500 hover:bg-amber-400 text-black transition-colors shrink-0 shadow-sm"
-        >
-          ⚡ Load Sample Indian Fleet (INR ₹)
-        </button>
-      </div>
-
       {/* Security & Multi-Tenancy Guarantee Footer */}
       <div className="mt-4 pt-4 border-t border-inherit flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-neutral-500 dark:text-neutral-400">
         <div className="flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-emerald-500" />
-          <span>Strict Tenant Isolation Active: Seeded demo data is never mixed into your account.</span>
+          <span>Tenant-scoped API access is enforced; the browser never connects directly to PostgreSQL.</span>
         </div>
         <div className="flex items-center gap-2">
           <Building2 className="w-4 h-4 text-blue-500" />
-          <span>PostgreSQL Row Level Security (RLS) Enforced.</span>
+          <span>Backend queries are scoped to the authenticated tenant.</span>
         </div>
       </div>
     </div>

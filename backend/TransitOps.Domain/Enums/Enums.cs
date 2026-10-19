@@ -2,6 +2,7 @@ namespace TransitOps.Domain.Enums;
 
 public enum UserRole
 {
+    OrganizationAdmin,
     FleetManager,
     Driver,
     SafetyOfficer,

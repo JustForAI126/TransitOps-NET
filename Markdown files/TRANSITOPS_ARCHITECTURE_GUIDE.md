@@ -6,7 +6,7 @@
 ## 🌟 Table of Contents
 1. [The "Explain Like I'm Five" Domain Intro](#1-the-explain-like-im-five-domain-intro)
 2. [The Life of a Delivery: The Real-World Pipeline](#2-the-life-of-a-delivery-the-real-world-pipeline)
-3. [The 4 Roles: Who Sees What & Why? (The Secret Behind RBAC)](#3-the-4-roles-who-sees-what--why-the-secret-behind-rbac)
+3. [The Roles: Who Sees What & Why? (The Secret Behind RBAC)](#3-the-roles-who-sees-what--why-the-secret-behind-rbac)
 4. [How to Think About KPIs Like a Backend Engineer](#4-how-to-think-about-kpis-like-a-backend-engineer)
 5. [Entity-Relationship (ER) Diagram (Mermaid)](#5-entity-relationship-er-diagram-mermaid)
 6. [Mapping to .NET 8 and Entity Framework Core (EF Core)](#6-mapping-to-net-8-and-entity-framework-core-ef-core)
@@ -63,7 +63,7 @@ If any software bug allows a broken truck to be assigned to a trip, or an unlice
 
 ---
 
-## 3. The 4 Roles: Who Sees What & Why? (The Secret Behind RBAC)
+## 3. The Roles: Who Sees What & Why? (The Secret Behind RBAC)
 
 In software development, **RBAC** stands for **Role-Based Access Control**. 
 Why don't we just show every user the exact same giant screen with all the buttons?
@@ -81,10 +81,15 @@ Here is why each role in TransitOps has a custom dashboard:
 
 | Role | What They See | What Is Hidden | Why It's Designed This Way |
 | :--- | :--- | :--- | :--- |
+| **Organization Admin** | • Organization account list<br>• Create Fleet Manager, Driver, Safety Officer, and Financial Analyst accounts | • Fleet operations unless also assigned an operational role<br>• Ability to create another Organization Admin | **The Organization Owner**: Provisions accounts inside the purchased organization's tenant. The first Organization Admin is created only through trusted purchase provisioning; billing integration is not implemented yet. |
 | **Fleet Manager** | • Live Route Radar Map<br>• Fleet Utilization %<br>• Quick Action: Create Trip<br>• Quick Action: Register Vehicle<br>• Active Dispatches Table | • Secret employee salary data<br>• Deep tax accounting | **The General**: Coordinates assets. Needs to know which trucks are moving, which are sitting idle, and who can take the next batch of cargo. |
-| **Driver / Dispatcher** | • Active Dispatches Radar<br>• Pending Departure Queue<br>• "Dispatch Now" button<br>• "Complete Delivery" modal (Odometer & Fuel log) | • Company profit margins<br>• Financial ledgers<br>• Driver suspension controls | **The Boots on the Ground**: Cares about *execution*. "What cargo am I hauling?", "Where am I driving?", and "Where do I submit my odometer and gas receipt when done?" |
+| **Driver** (not a separate Dispatcher role) | • Active Dispatches<br>• Pending Departure Queue<br>• "Dispatch Now" button<br>• "Complete Delivery" modal (Odometer & Fuel log) | • Company profit margins<br>• Financial ledgers<br>• Driver suspension controls | **The Boots on the Ground**: Cares about *execution*. The current backend grants trip operations tenant-wide; that is not equivalent to driver-only assignment enforcement. |
 | **Safety Officer** | • Expired License alerts<br>• Expiring in &lt;30 days matrix<br>• "Suspend Driver" button<br>• "Send Reminder Notice" email<br>• Maintenance safety locks | • Live radar map<br>• Financial margins<br>• New trip creation | **The Guardian / Inspector**: Their only mission is safety compliance and preventing lawsuits. If a driver's license expired yesterday, they must have the power to instantly ground them. |
 | **Financial Analyst** | • Total Fleet OPEX<br>• Fuel Spend vs Maintenance Breakdown<br>• Cost Per Kilometer ($/km)<br>• Trip Profitability Ledger<br>• CSV Financial Ledger Export | • Live vehicle GPS radar<br>• Dispatch / Cancel buttons<br>• Driver suspension toggles | **The Accountant**: Looks backwards and forwards at cash flow. Did Trip #TRIP-102 make money or lose money after paying for 120 liters of diesel? |
+
+The original requirement permits either a Driver or a Dispatcher role. This application defines only Driver, and does not treat it as a separate Dispatcher role.
+
+Public self-registration is disabled. Development startup idempotently seeds the demo tenant data and accounts when `DemoAccounts:Password` is configured in .NET User Secrets. In production, users must belong to an organization and be created by its Organization Admin; purchase fulfillment must provision that first admin through a trusted integration.
 
 ---
 
@@ -154,7 +159,7 @@ erDiagram
         Guid Id PK
         string Name
         string Email "Unique"
-        string Role "fleet_manager | driver | safety_officer | financial_analyst"
+        string Role "organization_admin | fleet_manager | driver | safety_officer | financial_analyst"
         string AvatarUrl
         DateTime CreatedAtUtc
     }
@@ -274,7 +279,7 @@ TransitOps.sln
 ```csharp
 namespace TransitOps.Domain.Enums;
 
-public enum UserRole { FleetManager, Driver, SafetyOfficer, FinancialAnalyst }
+public enum UserRole { OrganizationAdmin, FleetManager, Driver, SafetyOfficer, FinancialAnalyst }
 public enum VehicleStatus { Available, OnTrip, InShop, Retired }
 public enum VehicleType { Van, Truck, Pickup, SemiTrailer, BoxTruck }
 public enum DriverStatus { Available, OnTrip, OffDuty, Suspended }

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Truck,
   CheckCircle2,
@@ -36,8 +36,8 @@ export const FleetManagerDashboard: React.FC<FleetManagerDashboardProps> = ({
   const {
     trips,
     drivers,
+    vehicles,
     maintenanceRecords,
-    getKPIStats,
     dispatchTrip,
     cancelTrip,
     closeMaintenanceRecord,
@@ -48,7 +48,29 @@ export const FleetManagerDashboard: React.FC<FleetManagerDashboardProps> = ({
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
-  const kpis = getKPIStats();
+  const [vehicleTypeFilter, setVehicleTypeFilter] = useState('All');
+  const [vehicleStatusFilter, setVehicleStatusFilter] = useState('All');
+  const [regionFilter, setRegionFilter] = useState('All');
+  const filteredVehicles = vehicles.filter((vehicle) =>
+    (vehicleTypeFilter === 'All' || vehicle.type === vehicleTypeFilter) &&
+    (vehicleStatusFilter === 'All' || vehicle.status === vehicleStatusFilter) &&
+    (regionFilter === 'All' || vehicle.region === regionFilter)
+  );
+  const filteredVehicleIds = new Set(filteredVehicles.map((vehicle) => vehicle.id));
+  const filteredTrips = trips.filter((trip) => filteredVehicleIds.has(trip.vehicleId));
+  const nonRetiredVehicles = filteredVehicles.filter((vehicle) => vehicle.status !== 'Retired').length;
+  const activeVehicles = filteredVehicles.filter((vehicle) => vehicle.status === 'On Trip').length;
+  const kpis = {
+    activeVehicles,
+    availableVehicles: filteredVehicles.filter((vehicle) => vehicle.status === 'Available').length,
+    vehiclesInMaintenance: filteredVehicles.filter((vehicle) => vehicle.status === 'In Shop').length,
+    activeTrips: filteredTrips.filter((trip) => trip.status === 'Dispatched').length,
+    pendingTrips: filteredTrips.filter((trip) => trip.status === 'Draft').length,
+    driversOnDuty: drivers.filter((driver) => driver.status === 'On Duty').length,
+    fleetUtilization: nonRetiredVehicles > 0
+      ? Math.round((activeVehicles / nonRetiredVehicles) * 1000) / 10
+      : 0,
+  };
   const today = new Date().toISOString().split('T')[0];
 
   const expiringDrivers = drivers.filter((d) => {
@@ -149,6 +171,28 @@ export const FleetManagerDashboard: React.FC<FleetManagerDashboardProps> = ({
         </div>
       </div>
 
+      <div className={`flex flex-wrap items-center gap-3 rounded-xl border p-3 ${
+        isDark ? 'bg-[#14171e] border-[#252b36]' : 'bg-white border-[#e5dfd2]'
+      }`}>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Filter fleet KPIs</span>
+        <select aria-label="Filter by vehicle type" value={vehicleTypeFilter} onChange={(event) => setVehicleTypeFilter(event.target.value)} className="rounded-lg border px-2.5 py-1.5 text-xs bg-transparent">
+          <option value="All">All types</option>
+          {[...new Set(vehicles.map((vehicle) => vehicle.type))].sort().map((type) => <option key={type} value={type}>{type}</option>)}
+        </select>
+        <select aria-label="Filter by vehicle status" value={vehicleStatusFilter} onChange={(event) => setVehicleStatusFilter(event.target.value)} className="rounded-lg border px-2.5 py-1.5 text-xs bg-transparent">
+          <option value="All">All statuses</option>
+          <option value="Available">Available</option>
+          <option value="On Trip">On Trip</option>
+          <option value="In Shop">In Shop</option>
+          <option value="Retired">Retired</option>
+        </select>
+        <select aria-label="Filter by region" value={regionFilter} onChange={(event) => setRegionFilter(event.target.value)} className="rounded-lg border px-2.5 py-1.5 text-xs bg-transparent">
+          <option value="All">All regions</option>
+          {[...new Set(vehicles.map((vehicle) => vehicle.region))].sort().map((region) => <option key={region} value={region}>{region}</option>)}
+        </select>
+        <span className="text-[10px] text-neutral-400">On-duty driver count is fleet-wide; driver records are not associated with vehicle regions or types.</span>
+      </div>
+
       {/* KPI Cards Row (7 Operational KPIs) */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4">
         <div
@@ -247,8 +291,9 @@ export const FleetManagerDashboard: React.FC<FleetManagerDashboardProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8">
           <LiveRouteRadar
-            title="Executive Fleet Route Radar"
-            subtitle="Geographic tracking of commercial carriers and active transit lines"
+            title="Active Dispatches"
+            subtitle="Current assigned routes and saved trip data. GPS location is not available."
+            trips={filteredTrips}
           />
         </div>
 

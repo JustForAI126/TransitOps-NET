@@ -1,4 +1,5 @@
 export type UserRole =
+  | 'organization_admin'
   | 'fleet_manager'
   | 'driver'
   | 'safety_officer'
@@ -10,12 +11,9 @@ export type VehicleType =
   | 'Van'
   | 'Truck'
   | 'Heavy Truck'
-  | 'Light Commercial'
-  | 'Container Carrier'
-  | 'Flatbed'
   | 'Pickup'
-  | 'SemiTrailer'
-  | 'BoxTruck';
+  | 'Semi-Trailer'
+  | 'Box Truck';
 
 export type DriverStatus =
   | 'Available'
@@ -23,6 +21,18 @@ export type DriverStatus =
   | 'On Duty'
   | 'Off Duty'
   | 'Suspended';
+
+export const INDIAN_LICENSE_CATEGORIES = [
+  { value: 'MCWG', label: 'MCWG — Motorcycle with Gear' },
+  { value: 'MCWOG', label: 'MCWOG — Motorcycle without Gear' },
+  { value: 'LMV', label: 'LMV — Light Motor Vehicle' },
+  { value: 'LMV-NT', label: 'LMV-NT — Light Motor Vehicle (Non-Transport)' },
+  { value: 'LMV-TR', label: 'LMV-TR — Light Motor Vehicle (Transport)' },
+  { value: 'HMV', label: 'HMV — Heavy Motor Vehicle' },
+  { value: 'HGMV', label: 'HGMV — Heavy Goods Motor Vehicle' },
+  { value: 'HPMV', label: 'HPMV — Heavy Passenger Motor Vehicle' },
+  { value: 'HTV', label: 'HTV — Heavy Transport Vehicle' },
+] as const;
 
 export type TripStatus = 'Draft' | 'Dispatched' | 'Completed' | 'Cancelled';
 
@@ -46,6 +56,14 @@ export interface UserAccount {
   avatarUrl?: string;
 }
 
+export interface OrganizationUser {
+  id: string;
+  fullName: string;
+  email: string;
+  role: UserRole;
+  driverId: string | null;
+}
+
 export interface VehicleDocument {
   type: string;
   expiryDate: string;
@@ -60,10 +78,10 @@ export interface Vehicle {
   type: VehicleType | string;
   maxCapacityKg: number;
   currentOdometerKm: number;
-  acquisitionCost: number;
+  acquisitionCost: number | null;
   status: VehicleStatus | string;
   region: string;
-  revenueGenerated: number;
+  revenueGenerated: number | null;
   fuelEfficiencyKmPerLiter: number;
   documents: VehicleDocument[];
   createdAt: string;
@@ -96,7 +114,7 @@ export interface Trip {
   driverName: string;
   cargoWeightKg: number;
   plannedDistanceKm: number;
-  revenue: number;
+  revenue: number | null;
   status: TripStatus | string;
   createdAt: string;
   dispatchedAt?: string;
@@ -131,6 +149,7 @@ export interface FuelExpenseRecord {
   cost?: number;
   amount?: number;
   date: string;
+  expenseDate?: string;
   liters?: number;
   fuelLiters?: number;
   description?: string;

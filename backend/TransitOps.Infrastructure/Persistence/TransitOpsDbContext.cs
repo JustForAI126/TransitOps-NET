@@ -30,7 +30,8 @@ public class TransitOpsDbContext : IdentityDbContext<ApplicationUser>
         modelBuilder.Entity<Vehicle>(entity =>
         {
             entity.HasKey(v => v.Id);
-            entity.HasIndex(v => v.RegistrationNumber).IsUnique();
+            entity.HasIndex(v => v.RegistrationNumber).IsUnique()
+                .HasDatabaseName("IX_Vehicles_RegistrationNumber");
             entity.Property(v => v.RegistrationNumber).HasMaxLength(32).IsRequired();
             entity.Property(v => v.AcquisitionCost).HasPrecision(18, 2);
             entity.Property(v => v.RevenueGenerated).HasPrecision(18, 2);
@@ -48,9 +49,18 @@ public class TransitOpsDbContext : IdentityDbContext<ApplicationUser>
         modelBuilder.Entity<Driver>(entity =>
         {
             entity.HasKey(d => d.Id);
-            entity.HasIndex(d => d.Email).IsUnique();
-            entity.HasIndex(d => d.LicenseNumber).IsUnique();
+            entity.HasIndex(d => d.Email).IsUnique()
+                .HasDatabaseName("IX_Drivers_Email");
+            entity.HasIndex(d => d.LicenseNumber).IsUnique()
+                .HasDatabaseName("IX_Drivers_LicenseNumber");
+            entity.HasIndex(d => d.IdentityUserId).IsUnique()
+                .HasDatabaseName("IX_Drivers_IdentityUserId");
+            entity.Property(d => d.IdentityUserId).HasMaxLength(450);
             entity.Property(d => d.Status).HasConversion<string>();
+            entity.ToTable(table =>
+            {
+                table.HasCheckConstraint("CK_Drivers_SafetyScore", "\"SafetyScore\" >= 0 AND \"SafetyScore\" <= 100");
+            });
         });
 
         // TRIP
@@ -58,6 +68,14 @@ public class TransitOpsDbContext : IdentityDbContext<ApplicationUser>
         {
             entity.HasKey(t => t.Id);
             entity.HasIndex(t => t.TripCode).IsUnique();
+            entity.HasIndex(t => t.VehicleId)
+                .IsUnique()
+                .HasFilter("\"Status\" = 'Dispatched'")
+                .HasDatabaseName("UX_Trips_OneDispatchedVehicle");
+            entity.HasIndex(t => t.DriverId)
+                .IsUnique()
+                .HasFilter("\"Status\" = 'Dispatched'")
+                .HasDatabaseName("UX_Trips_OneDispatchedDriver");
             entity.Property(t => t.Revenue).HasPrecision(18, 2);
             entity.Property(t => t.FuelConsumedLiters).HasPrecision(8, 2);
             entity.Property(t => t.Status).HasConversion<string>();

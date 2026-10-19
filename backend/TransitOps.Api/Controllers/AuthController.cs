@@ -1,8 +1,11 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using Microsoft.AspNetCore.Identity;
+using FluentValidation;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 using TransitOps.Application.DTOs;
 using TransitOps.Domain.Entities;
@@ -12,148 +15,136 @@ namespace TransitOps.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class AuthController : ControllerBase
+[EnableRateLimiting("auth")]
+public sealed class AuthController : ControllerBase
 {
+    private const string AccessCookieName = "transitops_access";
+    private static readonly TimeSpan AccessTokenLifetime = TimeSpan.FromMinutes(30);
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly IConfiguration _config;
+    private readonly IValidator<LoginRequest> _loginValidator;
 
     public AuthController(
         UserManager<ApplicationUser> userManager,
         SignInManager<ApplicationUser> signInManager,
-        IConfiguration config)
+        IConfiguration config,
+        IValidator<LoginRequest> loginValidator)
     {
         _userManager = userManager;
         _signInManager = signInManager;
         _config = config;
+        _loginValidator = loginValidator;
     }
 
+    [AllowAnonymous]
     [HttpPost("login")]
-    public async Task<IActionResult> Login([FromBody] LoginRequest request)
+    public async Task<IActionResult> Login([FromBody] LoginRequest request, CancellationToken cancellationToken)
     {
-        var user = await _userManager.FindByEmailAsync(request.Email);
-        
-        // Support quick demo logins or production password verification
-        if (user == null && request.Email.EndsWith("@transitops.com"))
+        var validation = await _loginValidator.ValidateAsync(request, cancellationToken);
+        if (!validation.IsValid)
         {
-            // Seed demo user on first hit if not yet seeded
-            var demoRole = request.Role != null && Enum.TryParse<UserRole>(request.Role, true, out var parsedRole)
-                ? parsedRole
-                : UserRole.FleetManager;
-
-            user = new ApplicationUser
-            {
-                UserName = request.Email,
-                Email = request.Email,
-                FullName = GetNameFromEmail(request.Email),
-                Role = demoRole,
-                TenantId = "demo_tenant",
-                IsDemoAccount = true,
-                EmailConfirmed = true
-            };
-
-            await _userManager.CreateAsync(user, "TransitOps@Demo2026!");
+            return BadRequest(new ValidationProblemDetails(validation.ToDictionary()));
         }
 
-        if (user == null)
+        var user = await _userManager.FindByEmailAsync(request.Email.Trim());
+        if (user is null)
         {
-            return Unauthorized(new { message = "Invalid email or credentials." });
+            return InvalidCredentials();
         }
 
-        var token = GenerateJwtToken(user);
-        var userDto = new UserDto(
-            user.Id,
-            user.FullName,
-            user.Email ?? "",
-            user.Role.ToString(),
-            user.TenantId,
-            user.IsDemoAccount,
-            user.AvatarUrl
-        );
+        var result = await _signInManager.CheckPasswordSignInAsync(
+            user,
+            request.Password,
+            lockoutOnFailure: true);
 
-        return Ok(new AuthResponse(token, Guid.NewGuid().ToString("N"), userDto));
-    }
-
-    [HttpPost("register")]
-    public async Task<IActionResult> Register([FromBody] RegisterRequest request)
-    {
-        var existing = await _userManager.FindByEmailAsync(request.Email);
-        if (existing != null)
-        {
-            return BadRequest(new { message = "An account with this email already exists." });
-        }
-
-        var role = Enum.TryParse<UserRole>(request.Role, true, out var parsedRole)
-            ? parsedRole
-            : UserRole.FleetManager;
-
-        // New accounts get a unique, isolated tenant ID. Seeded demo data is NEVER visible to new accounts!
-        var newTenantId = $"tenant_{Guid.NewGuid():N}";
-
-        var user = new ApplicationUser
-        {
-            UserName = request.Email,
-            Email = request.Email,
-            FullName = request.FullName,
-            Role = role,
-            TenantId = newTenantId,
-            IsDemoAccount = false,
-            EmailConfirmed = true
-        };
-
-        var result = await _userManager.CreateAsync(user, request.Password ?? "TransitOps@Secure2026!");
         if (!result.Succeeded)
         {
-            return BadRequest(new { errors = result.Errors.Select(e => e.Description) });
+            return InvalidCredentials();
         }
 
-        var token = GenerateJwtToken(user);
-        var userDto = new UserDto(
-            user.Id,
-            user.FullName,
-            user.Email,
-            user.Role.ToString(),
-            user.TenantId,
-            false,
-            null
-        );
-
-        return Ok(new AuthResponse(token, Guid.NewGuid().ToString("N"), userDto));
+        WriteAccessCookie(user);
+        return Ok(ToUserDto(user));
     }
 
+    [Authorize]
     [HttpGet("me")]
     public async Task<IActionResult> GetCurrentUser()
     {
-        var email = User.FindFirstValue(ClaimTypes.Email);
-        if (string.IsNullOrEmpty(email))
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? User.FindFirstValue(JwtRegisteredClaimNames.Sub);
+        if (string.IsNullOrWhiteSpace(userId))
         {
             return Unauthorized();
         }
 
-        var user = await _userManager.FindByEmailAsync(email);
-        if (user == null) return NotFound();
+        var user = await _userManager.FindByIdAsync(userId);
+        return user is null ? Unauthorized() : Ok(ToUserDto(user));
+    }
 
-        return Ok(new UserDto(
-            user.Id,
-            user.FullName,
-            user.Email ?? "",
-            user.Role.ToString(),
-            user.TenantId,
-            user.IsDemoAccount,
-            user.AvatarUrl
-        ));
+    [AllowAnonymous]
+    [HttpPost("logout")]
+    public IActionResult Logout()
+    {
+        Response.Cookies.Delete(AccessCookieName, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = Request.IsHttps,
+            SameSite = SameSiteMode.Lax,
+            Path = "/"
+        });
+        return NoContent();
+    }
+
+    private IActionResult InvalidCredentials() => Unauthorized(new ProblemDetails
+    {
+        Status = StatusCodes.Status401Unauthorized,
+        Title = "Sign-in failed",
+        Detail = "The email address or password is incorrect."
+    });
+
+    private UserDto ToUserDto(ApplicationUser user) => new(
+        user.Id,
+        user.FullName,
+        user.Email ?? string.Empty,
+        user.Role switch
+        {
+            UserRole.OrganizationAdmin => "organization_admin",
+            UserRole.FleetManager => "fleet_manager",
+            UserRole.Driver => "driver",
+            UserRole.SafetyOfficer => "safety_officer",
+            UserRole.FinancialAnalyst => "financial_analyst",
+            _ => throw new InvalidOperationException("The account has an unsupported role.")
+        },
+        user.TenantId,
+        user.IsDemoAccount,
+        user.AvatarUrl);
+
+    private void WriteAccessCookie(ApplicationUser user)
+    {
+        var token = GenerateJwtToken(user);
+        Response.Cookies.Append(AccessCookieName, token, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = Request.IsHttps,
+            SameSite = SameSiteMode.Lax,
+            IsEssential = true,
+            Path = "/",
+            Expires = DateTimeOffset.UtcNow.Add(AccessTokenLifetime)
+        });
     }
 
     private string GenerateJwtToken(ApplicationUser user)
     {
-        var secret = _config["Jwt:Key"] ?? "TransitOpsSuperSecretProductionEncryptionKey2026!#$*";
+        var secret = _config["Jwt:Key"]
+            ?? throw new InvalidOperationException("JWT signing key is not configured.");
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        var expires = DateTime.UtcNow.Add(AccessTokenLifetime);
         var claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.Id),
-            new Claim(JwtRegisteredClaimNames.Email, user.Email ?? ""),
+            new Claim(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
             new Claim(ClaimTypes.Name, user.FullName),
             new Claim(ClaimTypes.Role, user.Role.ToString()),
             new Claim("tenant_id", user.TenantId),
@@ -161,19 +152,12 @@ public class AuthController : ControllerBase
         };
 
         var token = new JwtSecurityToken(
-            issuer: _config["Jwt:Issuer"] ?? "TransitOpsApi",
-            audience: _config["Jwt:Audience"] ?? "TransitOpsClient",
+            issuer: _config["Jwt:Issuer"],
+            audience: _config["Jwt:Audience"],
             claims: claims,
-            expires: DateTime.UtcNow.AddDays(7),
-            signingCredentials: creds
-        );
+            expires: expires,
+            signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);
-    }
-
-    private static string GetNameFromEmail(string email)
-    {
-        var part = email.Split('@')[0].Replace('.', ' ');
-        return char.ToUpper(part[0]) + part[1..];
     }
 }

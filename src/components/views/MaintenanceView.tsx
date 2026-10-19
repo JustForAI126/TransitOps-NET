@@ -23,11 +23,13 @@ export const MaintenanceView: React.FC<MaintenanceViewProps> = ({ onOpenLogMaint
   const {
     maintenanceRecords,
     closeMaintenanceRecord,
+    currentUser,
     vehicles,
     exportToCSV,
   } = useApp();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  const canManageMaintenance = currentUser?.role === 'fleet_manager';
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
@@ -88,13 +90,13 @@ export const MaintenanceView: React.FC<MaintenanceViewProps> = ({ onOpenLogMaint
             <Download className="w-3.5 h-3.5" />
             <span>Export Logs</span>
           </button>
-          <button
+          {canManageMaintenance && <button
             onClick={onOpenLogMaintModal}
             className="px-4 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white transition-all shadow-md flex items-center gap-1.5"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
             <span>Log Maintenance</span>
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -209,13 +211,13 @@ export const MaintenanceView: React.FC<MaintenanceViewProps> = ({ onOpenLogMaint
                       <Wrench className="w-10 h-10 mx-auto opacity-40 text-amber-500" />
                       <p className="font-bold text-sm">No Maintenance Work Orders</p>
                       <p className="text-xs">No active repair orders or service history recorded yet in this workspace.</p>
-                      <button
+                      {canManageMaintenance && <button
                         onClick={onOpenLogMaintModal}
                         className="mt-2 px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-500 hover:bg-amber-600 text-black inline-flex items-center gap-1.5 transition-colors"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>Log First Service Order</span>
-                      </button>
+                      </button>}
                     </div>
                   </td>
                 </tr>
@@ -261,13 +263,15 @@ export const MaintenanceView: React.FC<MaintenanceViewProps> = ({ onOpenLogMaint
                         )}
                       </td>
                       <td className="py-3.5 text-right pr-4">
-                        {isActive ? (
+                        {isActive && canManageMaintenance ? (
                           <button
                             onClick={() => closeMaintenanceRecord(m.id)}
                             className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
                           >
                             Close Work Order
                           </button>
+                        ) : isActive ? (
+                          <span className="text-[11px] text-neutral-400">Active</span>
                         ) : (
                           <span className="text-[11px] text-neutral-400 font-mono">
                             Closed on {m.completedDate}

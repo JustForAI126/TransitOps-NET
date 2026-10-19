@@ -9,20 +9,13 @@ import {
   FuelExpenseRecord,
   KPIStats,
 } from '../types';
-import {
-  initialVehicles,
-  initialDrivers,
-  initialTrips,
-  initialMaintenanceRecords,
-  initialFuelExpenses,
-} from '../data/initialData';
-import { api, setAuthToken } from '../services/api';
+import { ApiRequestError, api } from '../services/api';
 import { realtime } from '../services/signalr';
 
 export type ActiveView =
   | 'hero'
   | 'login'
-  | 'register'
+  | 'organization_admin'
   | 'dashboard'
   | 'vehicles'
   | 'drivers'
@@ -31,6 +24,26 @@ export type ActiveView =
   | 'expenses'
   | 'reports'
   | 'analytics';
+
+const viewPaths: Record<ActiveView, string> = {
+  hero: '/',
+  login: '/login',
+  organization_admin: '/admin',
+  dashboard: '/dashboard',
+  vehicles: '/vehicles',
+  drivers: '/drivers',
+  trips: '/trips',
+  maintenance: '/maintenance',
+  expenses: '/expenses',
+  reports: '/reports',
+  analytics: '/analytics',
+};
+
+const viewFromPath = (): ActiveView => {
+  const currentPath = window.location.pathname.replace(/\/+$/, '') || '/';
+  return (Object.entries(viewPaths).find(([, path]) => path === currentPath)?.[0] as ActiveView | undefined)
+    ?? (currentPath === '/' ? 'hero' : 'dashboard');
+};
 
 export interface AppNotification {
   id: string;
@@ -50,11 +63,9 @@ interface AppContextType {
   currentUser: UserAccount | null;
   setCurrentUser: (user: UserAccount | null) => void;
   userRole: UserRole;
-  setUserRole: (role: UserRole) => void;
   isAuthenticated: boolean;
-  login: (email: string, role?: UserRole) => Promise<boolean>;
-  logout: () => void;
-  register: (name: string, email: string, role: UserRole) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  logout: () => Promise<void>;
 
   // Data Collections
   vehicles: Vehicle[];
@@ -63,6 +74,7 @@ interface AppContextType {
   maintenanceRecords: MaintenanceRecord[];
   expenses: FuelExpenseRecord[];
   isLoadingData: boolean;
+  dataLoadError: string | null;
   refreshData: () => Promise<void>;
 
   // Filter State
@@ -80,11 +92,11 @@ interface AppContextType {
 
   // Business Operations
   addVehicle: (data: Omit<Vehicle, 'id' | 'createdAt' | 'revenueGenerated' | 'fuelEfficiencyKmPerLiter'>) => Promise<{ success: boolean; error?: string }>;
-  updateVehicle: (id: string, data: Partial<Vehicle>) => void;
+  updateVehicle: (id: string, data: Partial<Vehicle>) => Promise<void>;
   retireVehicle: (id: string) => Promise<void>;
 
   addDriver: (data: Omit<Driver, 'id' | 'tripsCount' | 'incidentHistoryCount'>) => Promise<{ success: boolean; error?: string }>;
-  updateDriver: (id: string, data: Partial<Driver>) => void;
+  updateDriver: (id: string, data: Partial<Driver>) => Promise<void>;
   toggleDriverSuspension: (id: string) => Promise<void>;
   sendLicenseReminderEmail: (driverId: string) => Promise<void>;
 
@@ -99,7 +111,7 @@ interface AppContextType {
   }) => Promise<{ success: boolean; error?: string }>;
   dispatchTrip: (tripId: string) => Promise<{ success: boolean; error?: string }>;
   completeTrip: (tripId: string, finalOdometerKm: number, fuelConsumedLiters: number) => Promise<{ success: boolean; error?: string }>;
-  cancelTrip: (tripId: string) => { success: boolean; error?: string };
+  cancelTrip: (tripId: string) => Promise<{ success: boolean; error?: string }>;
 
   createMaintenanceRecord: (data: {
     vehicleId: string;
@@ -110,7 +122,7 @@ interface AppContextType {
   }) => Promise<{ success: boolean; error?: string }>;
   closeMaintenanceRecord: (id: string, finalCost?: number, notes?: string) => Promise<{ success: boolean; error?: string }>;
 
-  addExpense: (data: Omit<FuelExpenseRecord, 'id'>) => Promise<void>;
+  addExpense: (data: Omit<FuelExpenseRecord, 'id'>) => Promise<{ success: boolean; error?: string }>;
   deleteExpense: (id: string) => Promise<void>;
 
   // Computed Values & Helpers
@@ -127,7 +139,6 @@ interface AppContextType {
   };
   updateVehicleStatus: (id: string, status: Vehicle['status']) => Promise<void>;
   exportToCSV: (filename: string, rows: Record<string, any>[]) => void;
-  loadSampleWorkspaceData: () => Promise<void>;
   showSplashAgain: () => void;
   isSplashActive: boolean;
   dismissSplash: () => void;
@@ -140,20 +151,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isSplashActive, setIsSplashActive] = useState<boolean>(true);
 
   // Auth & View State
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
-    const saved = localStorage.getItem('transitops_user');
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
 
-  const [userRole, setUserRoleState] = useState<UserRole>(() => {
-    return currentUser?.role || 'fleet_manager';
-  });
+  const userRole = currentUser?.role ?? 'driver';
 
-  const [activeView, setActiveView] = useState<ActiveView>(() => {
-    return currentUser ? 'dashboard' : 'hero';
-  });
+  const [activeView, setActiveViewState] = useState<ActiveView>(viewFromPath);
+  const setActiveView = useCallback((view: ActiveView) => {
+    setActiveViewState(view);
+    const path = viewPaths[view];
+    if (window.location.pathname !== path) {
+      window.history.pushState({}, '', path);
+    }
+  }, []);
+
+  useEffect(() => {
+    const syncViewFromLocation = () => setActiveViewState(viewFromPath());
+    window.addEventListener('popstate', syncViewFromLocation);
+    return () => window.removeEventListener('popstate', syncViewFromLocation);
+  }, []);
 
   const [isLoadingData, setIsLoadingData] = useState<boolean>(false);
+  const [dataLoadError, setDataLoadError] = useState<string | null>(null);
 
   // Operational Data: Initialized according to user state
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -226,29 +244,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Session verification on mount
   useEffect(() => {
-    const token = localStorage.getItem('transitops_token');
-    if (!token) return;
-
+    let cancelled = false;
     api.auth.me()
-      .then((userProfile: any) => {
-        if (userProfile && (userProfile.id || userProfile.email)) {
-          setCurrentUser((prev) => ({
-            id: userProfile.id || prev?.id || `usr-${Date.now()}`,
-            name: userProfile.fullName || userProfile.name || prev?.name || 'Operator',
-            email: userProfile.email || prev?.email || '',
-            role: (userProfile.role as UserRole) || prev?.role || 'fleet_manager',
-            tenantId: userProfile.tenantId || prev?.tenantId || 'demo_tenant',
-            isDemoAccount: userProfile.isDemoAccount ?? prev?.isDemoAccount ?? false,
-          }));
-        }
+      .then((profile) => {
+        if (cancelled) return;
+        const user: UserAccount = {
+          id: profile.id,
+          name: profile.fullName,
+          email: profile.email,
+          role: profile.role,
+          tenantId: profile.tenantId,
+          isDemoAccount: profile.isDemoAccount,
+          avatarUrl: profile.avatarUrl,
+        };
+        setCurrentUser(user);
+        setActiveView(profile.role === 'organization_admin' ? 'organization_admin' : 'dashboard');
       })
       .catch((err) => {
-        console.warn('[TransitOps Session] Token expired or invalid:', err);
-        setAuthToken(null);
+        if (!(err instanceof ApiRequestError && err.status === 401)) {
+          console.error('[TransitOps Session] Could not verify the current session:', err);
+        }
+        if (cancelled) return;
         setCurrentUser(null);
         setNotifications([]);
-        setActiveView('login');
+        setActiveView(viewFromPath() === 'hero' ? 'hero' : 'login');
       });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Fetch operational data from API
@@ -259,60 +282,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setTrips([]);
       setMaintenanceRecords([]);
       setExpenses([]);
+      setDataLoadError(null);
       return;
     }
 
-    const isDemo =
-      currentUser.isDemoAccount === true ||
-      currentUser.email?.toLowerCase().endsWith('@transitops.com');
+    if (currentUser.role === 'organization_admin') {
+      setIsLoadingData(false);
+      setVehicles([]);
+      setDrivers([]);
+      setTrips([]);
+      setMaintenanceRecords([]);
+      setExpenses([]);
+      setDataLoadError(null);
+      return;
+    }
 
     setIsLoadingData(true);
     try {
       const [v, d, t, m, e] = await Promise.all([
         api.vehicles.getAll(),
-        api.drivers.getAll(),
-        api.trips.getAll(),
-        api.maintenance.getAll(),
-        api.expenses.getAll(),
+        ['fleet_manager', 'safety_officer'].includes(currentUser.role)
+          ? api.drivers.getAll()
+          : Promise.resolve([]),
+        ['fleet_manager', 'driver', 'financial_analyst'].includes(currentUser.role)
+          ? api.trips.getAll()
+          : Promise.resolve([]),
+        ['fleet_manager', 'safety_officer'].includes(currentUser.role)
+          ? api.maintenance.getAll()
+          : Promise.resolve([]),
+        ['fleet_manager', 'financial_analyst'].includes(currentUser.role)
+          ? api.expenses.getAll()
+          : Promise.resolve([]),
       ]);
-
-      // If this is a demo account and backend returned 0 items, seed demo data
-      if (isDemo && Array.isArray(v) && v.length === 0) {
-        setVehicles(initialVehicles);
-        setDrivers(initialDrivers);
-        setTrips(initialTrips);
-        setMaintenanceRecords(initialMaintenanceRecords);
-        setExpenses(initialFuelExpenses);
-      } else {
-        setVehicles(Array.isArray(v) ? v : []);
-        setDrivers(Array.isArray(d) ? d : []);
-        setTrips(Array.isArray(t) ? t : []);
-        setMaintenanceRecords(Array.isArray(m) ? m : []);
-        setExpenses(Array.isArray(e) ? e : []);
-      }
+      setVehicles(Array.isArray(v) ? v : []);
+      setDrivers(Array.isArray(d) ? d : []);
+      setTrips(Array.isArray(t) ? t : []);
+      setMaintenanceRecords(Array.isArray(m) ? m : []);
+      setExpenses(Array.isArray(e) ? e : []);
+      setDataLoadError(null);
     } catch (err) {
-      console.warn('[TransitOps API] Fallback fetch handler:', err);
-      if (isDemo) {
-        setVehicles(initialVehicles);
-        setDrivers(initialDrivers);
-        setTrips(initialTrips);
-        setMaintenanceRecords(initialMaintenanceRecords);
-        setExpenses(initialFuelExpenses);
-      } else {
-        // Newly created accounts are strictly kept clean with 0 seeded items
-        setVehicles([]);
-        setDrivers([]);
-        setTrips([]);
-        setMaintenanceRecords([]);
-        setExpenses([]);
-      }
+      console.error('[TransitOps API] Could not load persisted workspace data:', err);
+      setDataLoadError('Workspace data could not be loaded. Check the API connection and retry.');
+      setVehicles([]);
+      setDrivers([]);
+      setTrips([]);
+      setMaintenanceRecords([]);
+      setExpenses([]);
+      addNotification('error', 'Workspace Load Failed', 'Could not load current workspace data. Retry the request.');
     } finally {
       setIsLoadingData(false);
     }
-  }, [currentUser]);
+  }, [currentUser, addNotification]);
 
-  // Connect to live real-time SignalR / SSE with strict tenant and user notification isolation
+  // Connect SignalR only for an authenticated user's tenant.
   useEffect(() => {
+    if (!currentUser) {
+      realtime.disconnect();
+      return;
+    }
+
     realtime.connect();
 
     const unsubDispatch = realtime.on('trip_dispatched', (data: any) => {
@@ -335,6 +363,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       refreshData();
     });
+    const unsubDriver = realtime.on('driver_status', refreshData);
+    const unsubMaintenance = realtime.on('maintenance_updated', refreshData);
+    const unsubExpense = realtime.on('expense_updated', refreshData);
 
     const unsubNotif = realtime.on('notification', (notif: any) => {
       // Discard notifications meant for other tenants
@@ -352,6 +383,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubDispatch();
       unsubComplete();
       unsubVehicle();
+      unsubDriver();
+      unsubMaintenance();
+      unsubExpense();
       unsubNotif();
       realtime.disconnect();
     };
@@ -360,7 +394,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Load user-isolated data & notifications when currentUser changes
   useEffect(() => {
     if (currentUser) {
-      localStorage.setItem('transitops_user', JSON.stringify(currentUser));
       // Load strictly this user and tenant's isolated notifications
       try {
         const notifKey = `transitops_notifs_${currentUser.tenantId || 'tenant'}_${currentUser.email}`;
@@ -371,7 +404,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       refreshData();
     } else {
-      localStorage.removeItem('transitops_user');
       setNotifications([]);
       setVehicles([]);
       setDrivers([]);
@@ -381,35 +413,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [currentUser, refreshData]);
 
-  const setUserRole = (role: UserRole) => {
-    setUserRoleState(role);
-    if (currentUser) {
-      const updated = { ...currentUser, role };
-      setCurrentUser(updated);
-      localStorage.setItem('transitops_user', JSON.stringify(updated));
-    }
-  };
-
-  const login = async (email: string, role: UserRole = 'fleet_manager'): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     // Clear notifications from any previous session so they never bleed into another account
     setNotifications([]);
 
     try {
-      const res = await api.auth.login(email, role);
-      const isDemo = res.user.isDemoAccount ?? (email.toLowerCase().endsWith('@transitops.com'));
+      const profile = await api.auth.login(email, password);
+      const isDemo = profile.isDemoAccount;
       const user: UserAccount = {
-        id: res.user.id,
-        name: res.user.fullName || res.user.name,
-        email: res.user.email,
-        role: (res.user.role as UserRole) || role,
-        avatarUrl: res.user.avatarUrl,
-        tenantId: res.user.tenantId || (isDemo ? 'demo_tenant' : `tenant_${res.user.id}`),
+        id: profile.id,
+        name: profile.fullName,
+        email: profile.email,
+        role: profile.role,
+        avatarUrl: profile.avatarUrl,
+        tenantId: profile.tenantId,
         isDemoAccount: isDemo,
       };
 
       setCurrentUser(user);
-      setUserRoleState(user.role);
-      setActiveView('dashboard');
+      setActiveView(user.role === 'organization_admin' ? 'organization_admin' : 'dashboard');
 
       addNotification(
         'success',
@@ -417,106 +439,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         `Welcome to TransitOps, ${user.name}! Workspace loaded.`,
         4000
       );
-      return true;
-    } catch {
-      // Local fallback for offline mode
-      const isDemo = email.toLowerCase().endsWith('@transitops.com');
-      const name = email.split('@')[0].replace('.', ' ');
-      const formattedName = name.charAt(0).toUpperCase() + name.slice(1);
-
-      const user: UserAccount = {
-        id: `usr-${Date.now()}`,
-        name: formattedName || 'Alex Morgan',
-        email,
-        role,
-        tenantId: isDemo ? 'demo_tenant' : `tenant_${Date.now()}`,
-        isDemoAccount: isDemo,
-      };
-
-      setCurrentUser(user);
-      setUserRoleState(role);
-      setActiveView('dashboard');
-
-      if (isDemo) {
-        setVehicles(initialVehicles);
-        setDrivers(initialDrivers);
-        setTrips(initialTrips);
-        setMaintenanceRecords(initialMaintenanceRecords);
-        setExpenses(initialFuelExpenses);
-      } else {
-        setVehicles([]);
-        setDrivers([]);
-        setTrips([]);
-        setMaintenanceRecords([]);
-        setExpenses([]);
-      }
-
-      addNotification('success', 'Logged In', `Welcome back, ${formattedName}!`, 4000);
-      return true;
+      return { success: true };
+    } catch (err) {
+      const message = err instanceof ApiRequestError && err.status === 401
+        ? 'The email address or password is incorrect.'
+        : err instanceof ApiRequestError && err.status >= 500
+          ? 'The sign-in service is temporarily unavailable. Please try again.'
+          : err instanceof TypeError
+            ? 'Unable to reach the sign-in service. Check your connection and try again.'
+            : 'Unable to sign in. Check your details and try again.';
+      return { success: false, error: message };
     }
   };
 
-  const logout = () => {
-    setAuthToken(null);
+  const logout = async () => {
+    try {
+      await api.auth.logout();
+    } catch (err) {
+      console.error('[TransitOps Session] Server sign-out failed:', err);
+    }
     setCurrentUser(null);
     setNotifications([]); // Clear all toasts on logout
-    setActiveView('hero');
+    setActiveView('login');
     addNotification('info', 'Signed Out', 'You have been safely signed out.', 3000);
-  };
-
-  const register = async (name: string, email: string, role: UserRole) => {
-    // Clear previous toasts so new account starts with clean view
-    setNotifications([]);
-
-    try {
-      const res = await api.auth.register(name, email, role);
-      const user: UserAccount = {
-        id: res.user.id,
-        name: res.user.fullName,
-        email: res.user.email,
-        role: (res.user.role as UserRole) || role,
-        tenantId: res.user.tenantId || `tenant_${res.user.id}`,
-        isDemoAccount: false,
-      };
-
-      setCurrentUser(user);
-      setUserRoleState(role);
-      setActiveView('dashboard');
-
-      // Newly registered accounts start with isolated clean state
-      setVehicles([]);
-      setDrivers([]);
-      setTrips([]);
-      setMaintenanceRecords([]);
-      setExpenses([]);
-
-      addNotification(
-        'success',
-        'Workspace Provisioned',
-        `Welcome ${name}! Your private fleet workspace is ready. Seeded demo data is hidden.`,
-        5000
-      );
-    } catch (err: any) {
-      addNotification('error', 'Registration Failed', err.message || 'Could not register account.', 4000);
-    }
-  };
-
-  const loadSampleWorkspaceData = async () => {
-    try {
-      setIsLoadingData(true);
-      await api.workspace.loadSampleData();
-      await refreshData();
-      addNotification('success', 'Sample Fleet Loaded', 'Sample logistics fleet assets provisioned into your private workspace.');
-    } catch {
-      setVehicles(JSON.parse(JSON.stringify(initialVehicles)));
-      setDrivers(JSON.parse(JSON.stringify(initialDrivers)));
-      setTrips(JSON.parse(JSON.stringify(initialTrips)));
-      setMaintenanceRecords(JSON.parse(JSON.stringify(initialMaintenanceRecords)));
-      setExpenses(JSON.parse(JSON.stringify(initialFuelExpenses)));
-      addNotification('success', 'Sample Fleet Loaded', 'Sample logistics fleet assets loaded.');
-    } finally {
-      setIsLoadingData(false);
-    }
   };
 
   // Business Operations
@@ -543,16 +488,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const updateVehicle = (id: string, data: Partial<Vehicle>) => {
-    setVehicles((prev) => prev.map((v) => (v.id === id ? { ...v, ...data } : v)));
+  const updateVehicle = async (id: string, data: Partial<Vehicle>) => {
+    try {
+      const updated = await api.vehicles.update(id, data);
+      setVehicles((prev) => prev.map((vehicle) => vehicle.id === id ? updated : vehicle));
+    } catch (err) {
+      addNotification('error', 'Vehicle Update Failed', err instanceof Error ? err.message : 'Vehicle could not be updated.');
+    }
   };
 
   const updateVehicleStatus = async (id: string, status: Vehicle['status']) => {
     try {
-      await api.vehicles.updateStatus(id, status);
-      setVehicles((prev) => prev.map((v) => (v.id === id ? { ...v, status } : v)));
-    } catch {
-      setVehicles((prev) => prev.map((v) => (v.id === id ? { ...v, status } : v)));
+      const updated = await api.vehicles.updateStatus(id, status);
+      setVehicles((prev) => prev.map((vehicle) => vehicle.id === id ? updated : vehicle));
+    } catch (err) {
+      addNotification('error', 'Vehicle Status Update Failed', err instanceof Error ? err.message : 'Vehicle status could not be updated.');
     }
   };
 
@@ -588,8 +538,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const updateDriver = (id: string, data: Partial<Driver>) => {
-    setDrivers((prev) => prev.map((d) => (d.id === id ? { ...d, ...data } : d)));
+  const updateDriver = async (id: string, data: Partial<Driver>) => {
+    try {
+      const updated = await api.drivers.update(id, data);
+      setDrivers((prev) => prev.map((driver) => driver.id === id ? updated : driver));
+    } catch (err) {
+      addNotification('error', 'Driver Update Failed', err instanceof Error ? err.message : 'Driver could not be updated.');
+    }
   };
 
   const toggleDriverSuspension = async (id: string) => {
@@ -639,7 +594,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Rule 2: Ground Expired or Suspended Drivers
     const isExpired = new Date(driver.licenseExpiryDate) < new Date();
-    if (driver.status === 'Suspended' || isExpired) {
+    if (driver.status === 'Suspended' || driver.status === 'Off Duty' || driver.status === 'On Trip' || isExpired) {
       const err = 'Driver cannot be dispatched due to expired license or active suspension.';
       addNotification('error', 'Driver Grounded', err);
       return { success: false, error: err };
@@ -687,17 +642,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const cancelTrip = (tripId: string) => {
+  const cancelTrip = async (tripId: string) => {
     const trip = trips.find((t) => t.id === tripId);
     if (!trip) return { success: false, error: 'Trip not found' };
 
-    setTrips((prev) => prev.map((t) => (t.id === tripId ? { ...t, status: 'Cancelled' } : t)));
-    if (trip.status === 'Dispatched') {
-      setVehicles((prev) => prev.map((v) => (v.id === trip.vehicleId && v.status === 'On Trip' ? { ...v, status: 'Available' } : v)));
-      setDrivers((prev) => prev.map((d) => (d.id === trip.driverId && d.status === 'On Trip' ? { ...d, status: 'Available' } : d)));
+    try {
+      const updated = await api.trips.cancel(tripId);
+      setTrips((prev) => prev.map((item) => item.id === tripId ? updated : item));
+      await refreshData();
+      addNotification('info', 'Trip Cancelled', `Trip ${trip.tripCode} marked as Cancelled.`);
+      return { success: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Trip could not be cancelled.';
+      addNotification('error', 'Trip Cancellation Failed', message);
+      return { success: false, error: message };
     }
-    addNotification('info', 'Trip Cancelled', `Trip ${trip.tripCode} marked as Cancelled.`);
-    return { success: true };
   };
 
   const createMaintenanceRecord = async (data: {
@@ -737,8 +696,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const newExp = await api.expenses.create(data);
       setExpenses((prev) => [newExp, ...prev]);
       addNotification('success', 'Expense Logged', 'Expense recorded successfully.');
+      return { success: true };
     } catch (err: any) {
       addNotification('error', 'Error Logging Expense', err.message);
+      return { success: false, error: err instanceof Error ? err.message : 'Expense could not be saved.' };
     }
   };
 
@@ -759,7 +720,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const vehiclesInMaintenance = vehicles.filter((v) => v.status === 'In Shop').length;
     const activeTrips = trips.filter((t) => t.status === 'Dispatched').length;
     const pendingTrips = trips.filter((t) => t.status === 'Draft').length;
-    const driversOnDuty = drivers.filter((d) => d.status === 'On Trip' || d.status === 'Available').length;
+    const driversOnDuty = drivers.filter((driver) => driver.status === 'On Duty').length;
     const nonRetired = vehicles.filter((v) => v.status !== 'Retired').length;
     const fleetUtilization = nonRetired > 0 ? Math.round((activeVehicles / nonRetired) * 100) : 0;
 
@@ -788,8 +749,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const calculateVehicleROI = (vehicleId: string) => {
     const vehicle = vehicles.find((v) => v.id === vehicleId);
-    const acqCost = vehicle ? vehicle.acquisitionCost : 0;
-    const rev = vehicle ? vehicle.revenueGenerated : 0;
+    const acqCost = vehicle?.acquisitionCost ?? 0;
+    const rev = vehicle?.revenueGenerated ?? 0;
 
     const maintCost = maintenanceRecords
       .filter((m) => m.vehicleId === vehicleId)
@@ -799,9 +760,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .filter((e) => e.vehicleId === vehicleId && (e.type || e.category) === 'Fuel')
       .reduce((sum, e) => sum + (e.cost || e.amount || 0), 0);
 
-    const profit = rev - (acqCost + maintCost + fuelCost);
-    const totalInvested = acqCost + maintCost + fuelCost;
-    const roiPercent = totalInvested > 0 ? Math.round((profit / totalInvested) * 100) : 0;
+    const profit = rev - (maintCost + fuelCost);
+    const roiPercent = acqCost > 0 ? Math.round((profit / acqCost) * 100) : 0;
 
     return {
       acquisitionCost: acqCost,
@@ -862,11 +822,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         currentUser,
         setCurrentUser,
         userRole,
-        setUserRole,
         isAuthenticated: !!currentUser,
         login,
         logout,
-        register,
 
         vehicles,
         drivers,
@@ -874,6 +832,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         maintenanceRecords,
         expenses,
         isLoadingData,
+        dataLoadError,
         refreshData,
 
         searchQuery,
@@ -913,7 +872,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         calculateVehicleROI,
         updateVehicleStatus,
         exportToCSV,
-        loadSampleWorkspaceData,
 
         showSplashAgain,
         isSplashActive,

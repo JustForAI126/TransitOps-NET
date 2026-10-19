@@ -1,0 +1,15 @@
+@baseUrl = http://localhost:5000
+
+### Sign in as a Fleet Manager first; the API uses its HttpOnly cookie.
+### Replace this request with the configured Development demo password.
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "manager@transitops.com",
+  "password": "<development-demo-password>"
+}
+
+### Download the tenant-scoped fleet ROI PDF (Fleet Manager only)
+GET {{baseUrl}}/api/reports/export/pdf/fleet-roi
+Accept: application/pdf

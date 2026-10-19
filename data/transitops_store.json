@@ -3,7 +3,7 @@
     "demo_tenant": {
       "vehicles": [
         {
-          "id": "veh-1",
+          "id": "veh-1792401718832-e2k3",
           "registrationNumber": "MH-12-DE-5005",
           "name": "Van-05 Cityline",
           "model": "Tata Winger Cargo 3400",
@@ -35,7 +35,7 @@
           "createdAt": "2024-01-15"
         },
         {
-          "id": "veh-2",
+          "id": "veh-1792401718832-5rl9",
           "registrationNumber": "MH-14-TR-2040",
           "name": "Van-02 Express",
           "model": "Force Traveller Delivery Van",
@@ -62,7 +62,7 @@
           "createdAt": "2023-08-20"
         },
         {
-          "id": "veh-3",
+          "id": "veh-1792401718832-hm6g",
           "registrationNumber": "KA-01-HG-9912",
           "name": "Titan-01 Heavy Hauler",
           "model": "Volvo FM 420 6x4 Heavy Truck",
@@ -89,7 +89,7 @@
           "createdAt": "2023-03-10"
         },
         {
-          "id": "veh-4",
+          "id": "veh-1792401718832-34hg",
           "registrationNumber": "DL-01-AX-4410",
           "name": "Hauler-04 Prime",
           "model": "Tata Prima 5530.S Trailer",
@@ -116,7 +116,7 @@
           "createdAt": "2022-11-05"
         },
         {
-          "id": "veh-5",
+          "id": "veh-1792401718832-75wv",
           "registrationNumber": "GJ-06-PK-7820",
           "name": "Ranger-08 Logistics",
           "model": "Mahindra Bolero Maxi Truck Plus",
@@ -143,7 +143,7 @@
           "createdAt": "2024-02-12"
         },
         {
-          "id": "veh-6",
+          "id": "veh-1792401718832-3c8e",
           "registrationNumber": "TN-09-BX-3341",
           "name": "Boxer-12 Freight",
           "model": "Eicher Pro 3015 Box Cargo",
@@ -170,7 +170,7 @@
           "createdAt": "2023-06-01"
         },
         {
-          "id": "veh-7",
+          "id": "veh-1792401718832-mstc",
           "registrationNumber": "MH-04-RT-1199",
           "name": "Legacy Van-01",
           "model": "Tata 407 SFC Delivery",
@@ -194,7 +194,7 @@
       ],
       "drivers": [
         {
-          "id": "drv-1",
+          "id": "drv-1792401718832-bru8",
           "name": "Rajesh Sharma",
           "licenseNumber": "DL-MH-12-2023008912",
           "licenseCategory": "Heavy Commercial Vehicle (HCV)",
@@ -207,7 +207,7 @@
           "incidentHistoryCount": 0
         },
         {
-          "id": "drv-2",
+          "id": "drv-1792401718832-bdfl",
           "name": "Sunita Rao",
           "licenseNumber": "DL-KA-01-2022005519",
           "licenseCategory": "Medium Goods Vehicle (MGV)",
@@ -220,7 +220,7 @@
           "incidentHistoryCount": 1
         },
         {
-          "id": "drv-3",
+          "id": "drv-1792401718832-h0gn",
           "name": "Vikram Singh",
           "licenseNumber": "DL-DL-01-2021003310",
           "licenseCategory": "Heavy Commercial Vehicle (HCV)",
@@ -233,7 +233,7 @@
           "incidentHistoryCount": 2
         },
         {
-          "id": "drv-4",
+          "id": "drv-1792401718832-io7a",
           "name": "Dinesh Kumar",
           "licenseNumber": "DL-MH-14-2019001182",
           "licenseCategory": "Light Commercial Vehicle (LCV)",
@@ -246,7 +246,7 @@
           "incidentHistoryCount": 4
         },
         {
-          "id": "drv-5",
+          "id": "drv-1792401718832-76vf",
           "name": "Priya Sharma",
           "licenseNumber": "DL-TN-09-2024009823",
           "licenseCategory": "Heavy Commercial Vehicle (HCV)",
@@ -259,7 +259,7 @@
           "incidentHistoryCount": 0
         },
         {
-          "id": "drv-6",
+          "id": "drv-1792401718832-khl1",
           "name": "Anil Deshmukh",
           "licenseNumber": "DL-GJ-06-2023004418",
           "licenseCategory": "Medium Goods Vehicle (MGV)",
@@ -274,7 +274,7 @@
       ],
       "trips": [
         {
-          "id": "trip-101",
+          "id": "trip-1792401718832-7ks7",
           "tripCode": "TR-204",
           "source": "JNPT Port Logistics Hub (Navi Mumbai)",
           "destination": "Pune Chakan Industrial Corridor",
@@ -291,7 +291,7 @@
           "dispatchedAt": "2026-09-10 07:15"
         },
         {
-          "id": "trip-102",
+          "id": "trip-1792401718832-0o90",
           "tripCode": "TR-205",
           "source": "Bangalore South Fulfillment Center",
           "destination": "Chennai Ennore Port Depot",
@@ -307,7 +307,7 @@
           "createdAt": "2026-09-10 08:45"
         },
         {
-          "id": "trip-100",
+          "id": "trip-1792401718832-f5gf",
           "tripCode": "TR-198",
           "source": "Ahmedabad GIDC Logistics Park",
           "destination": "Surat Diamond Corridor Hub",
@@ -329,7 +329,7 @@
       ],
       "maintenance": [
         {
-          "id": "maint-1",
+          "id": "maint-1792401718832-codb",
           "vehicleId": "veh-4",
           "vehicleRegNumber": "DL-01-AX-4410",
           "vehicleName": "Hauler-04 Prime",
@@ -341,7 +341,7 @@
           "technicianNotes": "OEM parts received from Tata authorized depot. Assembly and air bleed in progress."
         },
         {
-          "id": "maint-2",
+          "id": "maint-1792401718832-8z4o",
           "vehicleId": "veh-1",
           "vehicleRegNumber": "MH-12-DE-5005",
           "vehicleName": "Van-05 Cityline",
@@ -354,7 +354,7 @@
           "completedAt": "2026-08-25 15:00"
         },
         {
-          "id": "maint-3",
+          "id": "maint-1792401718832-391d",
           "vehicleId": "veh-3",
           "vehicleRegNumber": "KA-01-HG-9912",
           "vehicleName": "Titan-01 Heavy Hauler",
@@ -368,7 +368,7 @@
       ],
       "expenses": [
         {
-          "id": "exp-1",
+          "id": "exp-1792401718832-mk65",
           "vehicleId": "veh-1",
           "vehicleRegNumber": "MH-12-DE-5005",
           "vehicleName": "Van-05 Cityline",
@@ -380,7 +380,7 @@
           "notes": "IOCL Commercial Diesel Fill - Panvel Expressway Hub"
         },
         {
-          "id": "exp-2",
+          "id": "exp-1792401718832-b5lb",
           "vehicleId": "veh-2",
           "vehicleRegNumber": "MH-14-TR-2040",
           "vehicleName": "Van-02 Express",
@@ -390,7 +390,7 @@
           "notes": "Mumbai-Pune Expressway FASTag Plaza Auto-Deduct"
         },
         {
-          "id": "exp-3",
+          "id": "exp-1792401718832-bj54",
           "vehicleId": "veh-3",
           "vehicleRegNumber": "KA-01-HG-9912",
           "vehicleName": "Titan-01 Heavy Hauler",
@@ -402,7 +402,7 @@
           "notes": "High-speed BS-VI Diesel Fill - BPCL Hosur Bypass"
         },
         {
-          "id": "exp-4",
+          "id": "exp-1792401718832-ta5u",
           "vehicleId": "veh-4",
           "vehicleRegNumber": "DL-01-AX-4410",
           "vehicleName": "Hauler-04 Prime",
@@ -412,7 +412,7 @@
           "notes": "Pneumatic brake service invoice #INV-8812"
         },
         {
-          "id": "exp-5",
+          "id": "exp-1792401718832-p9v0",
           "vehicleId": "veh-6",
           "vehicleRegNumber": "TN-09-BX-3341",
           "vehicleName": "Boxer-12 Freight",
@@ -503,5 +503,5 @@
       "isDemoAccount": false
     }
   },
-  "savedAt": "2026-10-19T08:24:14.304Z"
+  "savedAt": "2026-10-19T09:21:58.833Z"
 }

@@ -1,3 +1,6 @@
+using System.Data;
+using FluentValidation;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -11,21 +14,35 @@ namespace TransitOps.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class TripsController : ControllerBase
 {
     private readonly TransitOpsDbContext _db;
     private readonly IHubContext<TransitOpsHub, ITransitOpsClient> _hub;
+    private readonly IValidator<CreateTripRequest> _createValidator;
+    private readonly IValidator<CompleteTripRequest> _completeValidator;
 
-    public TripsController(TransitOpsDbContext db, IHubContext<TransitOpsHub, ITransitOpsClient> hub)
+    public TripsController(
+        TransitOpsDbContext db,
+        IHubContext<TransitOpsHub, ITransitOpsClient> hub,
+        IValidator<CreateTripRequest> createValidator,
+        IValidator<CompleteTripRequest> completeValidator)
     {
         _db = db;
         _hub = hub;
+        _createValidator = createValidator;
+        _completeValidator = completeValidator;
     }
 
-    private string GetTenantId() => User.FindFirst("tenant_id")?.Value ?? "demo_tenant";
+    private string GetTenantId() => User.FindFirst("tenant_id")?.Value
+        ?? throw new UnauthorizedAccessException("The authenticated user has no tenant.");
 
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] string? status, [FromQuery] string? search)
+    [Authorize(Roles = "FleetManager,Driver,FinancialAnalyst")]
+    public async Task<IActionResult> GetAll(
+        [FromQuery] string? status,
+        [FromQuery] string? search,
+        CancellationToken cancellationToken)
     {
         var tenantId = GetTenantId();
         var query = _db.Trips
@@ -33,31 +50,48 @@ public class TripsController : ControllerBase
             .Include(t => t.Driver)
             .Where(t => t.TenantId == tenantId);
 
-        if (!string.IsNullOrEmpty(status) && Enum.TryParse<TripStatus>(status, true, out var parsedStatus))
+        if (!string.IsNullOrWhiteSpace(status))
         {
+            if (!Enum.TryParse<TripStatus>(status, true, out var parsedStatus) ||
+                !Enum.IsDefined(parsedStatus))
+            {
+                return BadRequest(new { message = "Invalid trip status filter." });
+            }
             query = query.Where(t => t.Status == parsedStatus);
         }
 
-        if (!string.IsNullOrEmpty(search))
+        if (!string.IsNullOrWhiteSpace(search))
         {
-            var s = search.ToLower();
+            var s = search.Trim().ToLower();
             query = query.Where(t => t.TripCode.ToLower().Contains(s) || t.Source.ToLower().Contains(s) || t.Destination.ToLower().Contains(s));
         }
 
-        var list = await query.OrderByDescending(t => t.CreatedAtUtc).ToListAsync();
-        return Ok(list);
+        var list = await query.OrderByDescending(t => t.CreatedAtUtc).ToListAsync(cancellationToken);
+        var canViewFinancials = User.IsInRole("FleetManager") || User.IsInRole("FinancialAnalyst");
+        return Ok(list.Select(trip => ToResponse(trip, canViewFinancials)));
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateTripRequest req)
+    [Authorize(Roles = "FleetManager,Driver")]
+    public async Task<IActionResult> Create([FromBody] CreateTripRequest req, CancellationToken cancellationToken)
     {
+        var validation = await _createValidator.ValidateAsync(req, cancellationToken);
+        if (!validation.IsValid)
+            return BadRequest(new ValidationProblemDetails(validation.ToDictionary()));
+        if (req.Revenue.HasValue && req.Revenue.Value < 0)
+            return BadRequest(new { message = "Revenue cannot be negative." });
+
         var tenantId = GetTenantId();
 
-        var vehicle = await _db.Vehicles.FirstOrDefaultAsync(v => v.Id == req.VehicleId && v.TenantId == tenantId);
+        var vehicle = await _db.Vehicles.FirstOrDefaultAsync(
+            v => v.Id == req.VehicleId && v.TenantId == tenantId,
+            cancellationToken);
         if (vehicle == null)
             return BadRequest(new { message = "Selected vehicle was not found." });
 
-        var driver = await _db.Drivers.FirstOrDefaultAsync(d => d.Id == req.DriverId && d.TenantId == tenantId);
+        var driver = await _db.Drivers.FirstOrDefaultAsync(
+            d => d.Id == req.DriverId && d.TenantId == tenantId,
+            cancellationToken);
         if (driver == null)
             return BadRequest(new { message = "Selected driver was not found." });
 
@@ -72,7 +106,8 @@ public class TripsController : ControllerBase
 
         // Business Rule 2: Ground Expired or Suspended Drivers
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        if (driver.Status == DriverStatus.Suspended || driver.LicenseExpiryDate < today)
+        if (driver.Status is DriverStatus.Suspended or DriverStatus.OffDuty or DriverStatus.OnTrip ||
+            driver.LicenseExpiryDate < today)
         {
             return UnprocessableEntity(new
             {
@@ -85,8 +120,8 @@ public class TripsController : ControllerBase
             return BadRequest(new { message = $"Cannot assign vehicle. Asset is currently '{vehicle.Status}'." });
         }
 
-        var tripCode = $"TRIP-{new Random().Next(1000, 9999)}";
-        decimal freightRevenue = req.Revenue ?? (req.PlannedDistanceKm * 45m); // ₹45/km baseline freight rate
+        var tripCode = $"TRIP-{Guid.NewGuid():N}".ToUpperInvariant();
+        decimal freightRevenue = req.Revenue ?? 0m;
 
         var trip = new Trip
         {
@@ -95,7 +130,9 @@ public class TripsController : ControllerBase
             Source = req.Source,
             Destination = req.Destination,
             VehicleId = vehicle.Id,
+            Vehicle = vehicle,
             DriverId = driver.Id,
+            Driver = driver,
             CargoWeightKg = req.CargoWeightKg,
             PlannedDistanceKm = req.PlannedDistanceKm,
             Revenue = freightRevenue,
@@ -103,23 +140,27 @@ public class TripsController : ControllerBase
         };
 
         _db.Trips.Add(trip);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(cancellationToken);
 
-        return CreatedAtAction(nameof(GetAll), new { id = trip.Id }, trip);
+        return CreatedAtAction(
+            nameof(GetAll),
+            new { id = trip.Id },
+            ToResponse(trip, canViewFinancials: false));
     }
 
     [HttpPost("{id:guid}/dispatch")]
-    public async Task<IActionResult> Dispatch(Guid id)
+    [Authorize(Roles = "FleetManager,Driver")]
+    public async Task<IActionResult> Dispatch(Guid id, CancellationToken cancellationToken)
     {
         var tenantId = GetTenantId();
 
-        using var tx = await _db.Database.BeginTransactionAsync();
-        try
-        {
+        await using var tx = await _db.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
             var trip = await _db.Trips
                 .Include(t => t.Vehicle)
                 .Include(t => t.Driver)
-                .FirstOrDefaultAsync(t => t.Id == id && t.TenantId == tenantId);
+                .FirstOrDefaultAsync(t => t.Id == id && t.TenantId == tenantId, cancellationToken);
 
             if (trip == null) return NotFound();
 
@@ -127,21 +168,25 @@ public class TripsController : ControllerBase
                 return BadRequest(new { message = $"Trip is already '{trip.Status}'." });
 
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
-            if (trip.Driver.Status == DriverStatus.Suspended || trip.Driver.LicenseExpiryDate < today)
+            if (trip.Driver.Status is DriverStatus.Suspended or DriverStatus.OffDuty or DriverStatus.OnTrip ||
+                trip.Driver.LicenseExpiryDate < today)
             {
                 return UnprocessableEntity(new { message = "Driver cannot be dispatched due to expired license or active suspension." });
             }
 
-            // Atomic state machine
+            if (trip.Vehicle.Status != VehicleStatus.Available)
+                return Conflict(new { message = $"Vehicle is not available for dispatch ({trip.Vehicle.Status})." });
+            if (trip.CargoWeightKg <= 0 || trip.CargoWeightKg > trip.Vehicle.MaxCapacityKg)
+                return UnprocessableEntity(new { message = "Trip cargo exceeds vehicle capacity." });
+
             trip.Status = TripStatus.Dispatched;
             trip.DispatchedAtUtc = DateTime.UtcNow;
             trip.Vehicle.Status = VehicleStatus.OnTrip;
             trip.Driver.Status = DriverStatus.OnTrip;
 
-            await _db.SaveChangesAsync();
-            await tx.CommitAsync();
+            await _db.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
 
-            // Broadcast real-time dispatch update via SignalR
             await _hub.Clients.Group($"tenant_{tenantId}").ReceiveTripDispatched(new
             {
                 tripId = trip.Id,
@@ -151,27 +196,29 @@ public class TripsController : ControllerBase
                 driver = trip.Driver.Name
             });
 
-            return Ok(trip);
-        }
-        catch (Exception ex)
-        {
-            await tx.RollbackAsync();
-            return StatusCode(500, new { message = "Failed to dispatch trip atomically: " + ex.Message });
-        }
+            return Ok(ToResponse(trip, canViewFinancials: User.IsInRole("FleetManager")));
     }
 
     [HttpPost("{id:guid}/complete")]
-    public async Task<IActionResult> Complete(Guid id, [FromBody] CompleteTripRequest req)
+    [Authorize(Roles = "FleetManager,Driver")]
+    public async Task<IActionResult> Complete(
+        Guid id,
+        [FromBody] CompleteTripRequest req,
+        CancellationToken cancellationToken)
     {
+        var validation = await _completeValidator.ValidateAsync(req, cancellationToken);
+        if (!validation.IsValid)
+            return BadRequest(new ValidationProblemDetails(validation.ToDictionary()));
+
         var tenantId = GetTenantId();
 
-        using var tx = await _db.Database.BeginTransactionAsync();
-        try
-        {
+        await using var tx = await _db.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
             var trip = await _db.Trips
                 .Include(t => t.Vehicle)
                 .Include(t => t.Driver)
-                .FirstOrDefaultAsync(t => t.Id == id && t.TenantId == tenantId);
+                .FirstOrDefaultAsync(t => t.Id == id && t.TenantId == tenantId, cancellationToken);
 
             if (trip == null) return NotFound();
 
@@ -183,7 +230,6 @@ public class TripsController : ControllerBase
                 return BadRequest(new { message = $"Final odometer ({req.FinalOdometerKm:N0}) must be greater than previous vehicle odometer ({trip.Vehicle.CurrentOdometerKm:N0})." });
             }
 
-            // Atomic completion
             trip.Status = TripStatus.Completed;
             trip.FinalOdometerKm = req.FinalOdometerKm;
             trip.FuelConsumedLiters = req.FuelConsumedLiters;
@@ -196,7 +242,6 @@ public class TripsController : ControllerBase
             trip.Driver.Status = DriverStatus.Available;
             trip.Driver.TotalTripsCompleted += 1;
 
-            // Automatically record fuel expense
             if (req.FuelConsumedLiters > 0)
             {
                 decimal fuelCost = req.FuelConsumedLiters * 105m; // ₹105/L
@@ -213,10 +258,9 @@ public class TripsController : ControllerBase
                 });
             }
 
-            await _db.SaveChangesAsync();
-            await tx.CommitAsync();
+            await _db.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
 
-            // Broadcast real-time completion update via SignalR
             await _hub.Clients.Group($"tenant_{tenantId}").ReceiveTripCompleted(new
             {
                 tripId = trip.Id,
@@ -225,12 +269,64 @@ public class TripsController : ControllerBase
                 finalOdometer = req.FinalOdometerKm
             });
 
-            return Ok(trip);
-        }
-        catch (Exception ex)
-        {
-            await tx.RollbackAsync();
-            return StatusCode(500, new { message = "Failed to complete trip atomically: " + ex.Message });
-        }
+            return Ok(ToResponse(trip, canViewFinancials: User.IsInRole("FleetManager")));
     }
+
+    [HttpPost("{id:guid}/cancel")]
+    [Authorize(Roles = "FleetManager,Driver")]
+    public async Task<IActionResult> Cancel(Guid id, CancellationToken cancellationToken)
+    {
+        var tenantId = GetTenantId();
+        await using var tx = await _db.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
+        var trip = await _db.Trips
+            .Include(t => t.Vehicle)
+            .Include(t => t.Driver)
+            .FirstOrDefaultAsync(t => t.Id == id && t.TenantId == tenantId, cancellationToken);
+        if (trip is null) return NotFound();
+        if (trip.Status is TripStatus.Completed or TripStatus.Cancelled)
+            return Conflict(new { message = $"A {trip.Status} trip cannot be cancelled." });
+
+        if (trip.Status == TripStatus.Dispatched)
+        {
+            var activeMaintenance = await _db.MaintenanceRecords.AnyAsync(
+                m => m.VehicleId == trip.VehicleId &&
+                    m.TenantId == tenantId &&
+                    m.Status == MaintenanceStatus.Active,
+                cancellationToken);
+            trip.Vehicle.Status = activeMaintenance ? VehicleStatus.InShop : VehicleStatus.Available;
+            trip.Driver.Status = DriverStatus.Available;
+        }
+
+        trip.Status = TripStatus.Cancelled;
+        await _db.SaveChangesAsync(cancellationToken);
+        await tx.CommitAsync(cancellationToken);
+        return Ok(ToResponse(trip, canViewFinancials: User.IsInRole("FleetManager")));
+    }
+
+    private static TripResponse ToResponse(Trip trip, bool canViewFinancials) => new(
+        trip.Id,
+        trip.TripCode,
+        trip.Source,
+        trip.Destination,
+        trip.VehicleId,
+        trip.Vehicle?.RegistrationNumber ?? string.Empty,
+        trip.Vehicle?.Name ?? string.Empty,
+        trip.DriverId,
+        trip.Driver?.Name ?? string.Empty,
+        trip.CargoWeightKg,
+        trip.PlannedDistanceKm,
+        trip.FinalOdometerKm,
+        trip.FuelConsumedLiters,
+        canViewFinancials ? trip.Revenue : null,
+        trip.Status,
+        new DateTimeOffset(DateTime.SpecifyKind(trip.CreatedAtUtc, DateTimeKind.Utc)),
+        trip.DispatchedAtUtc.HasValue
+            ? new DateTimeOffset(DateTime.SpecifyKind(trip.DispatchedAtUtc.Value, DateTimeKind.Utc))
+            : null,
+        trip.CompletedAtUtc.HasValue
+            ? new DateTimeOffset(DateTime.SpecifyKind(trip.CompletedAtUtc.Value, DateTimeKind.Utc))
+            : null);
 }

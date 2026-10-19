@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Fuel,
   Wrench,
@@ -14,6 +14,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { useTheme } from '../../context/ThemeContext';
 import { formatRupees } from '../../utils/currency';
+import { api, FinancialKpis } from '../../services/api';
 
 export const FinancialAnalystDashboard: React.FC = () => {
   const {
@@ -26,44 +27,46 @@ export const FinancialAnalystDashboard: React.FC = () => {
   } = useApp();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  const [financialKpis, setFinancialKpis] = useState<FinancialKpis | null>(null);
+  const [isLoadingKpis, setIsLoadingKpis] = useState(true);
+  const [kpiError, setKpiError] = useState(false);
 
-  // Financial calculations in Indian Rupees (₹)
-  const totalMaintenanceCost = maintenanceRecords.reduce((acc, m) => acc + (m.cost || 0), 0);
-  
-  // Fuel expense from logged expenses + estimated from completed trips (₹105/L diesel)
-  const loggedFuelCost = expenses
-    .filter((e) => e.type === 'Fuel' || e.category === 'Fuel' || e.fuelLiters)
-    .reduce((acc, e) => acc + (e.cost || e.amount || 0), 0);
-  
-  const tripFuelCost = trips.reduce((acc, t) => {
-    const liters = t.fuelConsumedLiters || (t.plannedDistanceKm * 0.18);
-    return acc + (liters * 105);
-  }, 0);
+  const loadFinancialKpis = useCallback(async () => {
+    setIsLoadingKpis(true);
+    setKpiError(false);
+    try {
+      setFinancialKpis(await api.kpi.getFinancial());
+    } catch (error) {
+      console.error('[TransitOps KPI] Could not load financial metrics:', error);
+      setKpiError(true);
+    } finally {
+      setIsLoadingKpis(false);
+    }
+  }, []);
 
-  const totalFuelCost = Math.max(loggedFuelCost, Math.round(tripFuelCost));
-  const otherExpenses = expenses
-    .filter((e) => e.type !== 'Fuel' && e.category !== 'Fuel')
-    .reduce((acc, e) => acc + (e.cost || e.amount || 0), 0);
+  useEffect(() => {
+    void loadFinancialKpis();
+  }, [loadFinancialKpis, trips, maintenanceRecords, expenses]);
 
-  const totalOpex = totalMaintenanceCost + totalFuelCost + otherExpenses;
-  const totalRevenue = trips.reduce((acc, t) => acc + (t.revenue || 0), 0);
-  const netOperatingProfit = totalRevenue - totalOpex;
-  const operatingMargin = totalRevenue > 0 ? Math.round((netOperatingProfit / totalRevenue) * 100) : 0;
-
-  const totalDistanceKm = trips.reduce((acc, t) => acc + (t.plannedDistanceKm || 0), 0);
-  const costPerKm = totalDistanceKm > 0 ? (totalOpex / totalDistanceKm).toFixed(2) : '0.00';
+  const completedTrips = trips.filter((trip) => trip.status === 'Completed');
+  const totalMaintenanceCost = financialKpis?.maintenanceSpend ?? 0;
+  const totalFuelCost = financialKpis?.fuelSpend ?? 0;
+  const totalOpex = financialKpis?.totalOpex ?? 0;
+  const otherExpenses = totalOpex - totalMaintenanceCost - totalFuelCost;
+  const totalRevenue = financialKpis?.grossRevenue ?? 0;
+  const netOperatingProfit = financialKpis?.netProfit ?? 0;
+  const operatingMargin = financialKpis?.netMarginPercentage ?? 0;
+  const costPerKm = (financialKpis?.costPerKm ?? 0).toFixed(2);
 
   // Vehicle Financial ranking
-  const sortedVehiclesByRevenue = [...vehicles].sort((a, b) => b.revenueGenerated - a.revenueGenerated);
+  const sortedVehiclesByRevenue = [...vehicles].sort(
+    (a, b) => (b.revenueGenerated ?? 0) - (a.revenueGenerated ?? 0)
+  );
   const topRevenueVehicle = sortedVehiclesByRevenue[0];
   const lowestEfficiencyVehicle = [...vehicles].sort((a, b) => a.fuelEfficiencyKmPerLiter - b.fuelEfficiencyKmPerLiter)[0];
 
   const handleExportFinancials = () => {
     const rows = trips.map((t) => {
-      const fuelLiters = t.fuelConsumedLiters || Math.round(t.plannedDistanceKm * 0.18);
-      const estimatedFuelCost = Math.round(fuelLiters * 105);
-      const netProfit = (t.revenue || 0) - estimatedFuelCost;
-
       return {
         TripCode: t.tripCode,
         Source: t.source,
@@ -71,10 +74,8 @@ export const FinancialAnalystDashboard: React.FC = () => {
         Vehicle: `${t.vehicleName} (${t.vehicleRegNumber})`,
         Driver: t.driverName,
         DistanceKm: t.plannedDistanceKm,
-        FuelLiters: fuelLiters,
-        FuelCostINR: estimatedFuelCost,
-        RevenueINR: t.revenue || 0,
-        NetMarginINR: netProfit,
+        FuelLiters: t.fuelConsumedLiters ?? '',
+        RevenueINR: t.status === 'Completed' ? t.revenue || 0 : '',
         Status: t.status,
       };
     });
@@ -99,6 +100,16 @@ export const FinancialAnalystDashboard: React.FC = () => {
             Fleet Profitability &amp; Cost Ledger
           </h1>
         </div>
+
+        {isLoadingKpis && <p role="status" className="text-xs text-neutral-400">Loading financial metrics…</p>}
+        {kpiError && (
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+            <span>Financial metrics could not be loaded. Retry to refresh this dashboard.</span>
+            <button type="button" onClick={() => void loadFinancialKpis()} disabled={isLoadingKpis} className="rounded-lg border border-red-400/40 px-3 py-1.5 font-semibold disabled:opacity-50">
+              Retry
+            </button>
+          </div>
+        )}
 
         {/* Action Controls */}
         <div className="flex flex-wrap items-center gap-2.5">
@@ -337,11 +348,11 @@ export const FinancialAnalystDashboard: React.FC = () => {
                     >
                       <div className="flex items-center justify-between font-bold mb-1">
                         <span className="text-emerald-400">Top Revenue Generator</span>
-                        <span className="font-mono text-emerald-400">{formatRupees(topRevenueVehicle.revenueGenerated)}</span>
+                        <span className="font-mono text-emerald-400">{formatRupees(topRevenueVehicle.revenueGenerated ?? 0)}</span>
                       </div>
                       <div className="font-semibold text-[11px]">{topRevenueVehicle.name} ({topRevenueVehicle.registrationNumber})</div>
                       <div className="text-[10px] text-neutral-400 mt-0.5">
-                        Acquisition: {formatRupees(topRevenueVehicle.acquisitionCost)} · Odometer: {topRevenueVehicle.currentOdometerKm.toLocaleString()} km
+                        Acquisition: {formatRupees(topRevenueVehicle.acquisitionCost ?? 0)} · Odometer: {topRevenueVehicle.currentOdometerKm.toLocaleString()} km
                       </div>
                     </div>
                   )}

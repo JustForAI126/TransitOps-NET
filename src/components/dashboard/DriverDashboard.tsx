@@ -175,8 +175,9 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8">
           <LiveRouteRadar
-            title="Active Dispatch Route Radar"
-            subtitle="Real-time transit corridors and road progress"
+            title="Active Dispatches"
+            subtitle="Assigned routes from saved trip data. GPS location is not available."
+            trips={trips}
           />
         </div>
 

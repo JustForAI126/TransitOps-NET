@@ -21,23 +21,29 @@ public class KpiService : IKpiService
         var tripQuery = _db.Trips.Where(t => t.TenantId == tenantId);
 
         var totalVehicles = await vehicleQuery.CountAsync(v => v.Status != VehicleStatus.Retired, ct);
+        var activeVehicles = await vehicleQuery.CountAsync(v => v.Status == VehicleStatus.OnTrip, ct);
         var activeDispatches = await tripQuery.CountAsync(t => t.Status == TripStatus.Dispatched, ct);
         var availableAssets = await vehicleQuery.CountAsync(v => v.Status == VehicleStatus.Available, ct);
         var maintenanceHolds = await vehicleQuery.CountAsync(v => v.Status == VehicleStatus.InShop, ct);
         var pendingDepartures = await tripQuery.CountAsync(t => t.Status == TripStatus.Draft, ct);
+        var driversOnDuty = await _db.Drivers.CountAsync(
+            d => d.TenantId == tenantId && d.Status == DriverStatus.OnDuty,
+            ct);
 
         double utilizationRate = totalVehicles > 0
-            ? Math.Round(((double)activeDispatches / totalVehicles) * 100.0, 1)
+            ? Math.Round(((double)activeVehicles / totalVehicles) * 100.0, 1)
             : 0.0;
 
         return new FleetKpiDto(
             TotalVehicles: totalVehicles,
+            ActiveVehicles: activeVehicles,
             ActiveDispatches: activeDispatches,
             AvailableAssets: availableAssets,
             MaintenanceHolds: maintenanceHolds,
             FleetUtilizationRate: utilizationRate,
             TotalTripsInProgress: activeDispatches,
-            PendingDepartures: pendingDepartures
+            PendingDepartures: pendingDepartures,
+            DriversOnDuty: driversOnDuty
         );
     }
 
@@ -61,7 +67,7 @@ public class KpiService : IKpiService
             ActiveDeliveries: activeDeliveries,
             DeliveredRunsToday: deliveredRunsToday,
             TotalTripsCompleted: totalTripsCompleted,
-            OnTimeDepartureRate: 97.4
+            OnTimeDepartureRate: null
         );
     }
 
@@ -117,17 +123,18 @@ public class KpiService : IKpiService
             .Select(g => new
             {
                 TotalRevenue = g.Sum(t => t.Revenue),
-                TotalDistanceKm = g.Sum(t => t.PlannedDistanceKm),
-                EstimatedFuelSpend = g.Sum(t => (t.FuelConsumedLiters ?? (t.PlannedDistanceKm * 0.18m)) * 105.0m) // ₹105/L average Indian diesel price
+                TotalPlannedDistanceKm = g.Sum(t => t.PlannedDistanceKm)
             })
             .FirstOrDefaultAsync(ct);
 
         decimal grossRevenue = tripStats?.TotalRevenue ?? 0m;
-        decimal fuelSpend = Math.Max(loggedFuelCost, tripStats?.EstimatedFuelSpend ?? 0m);
+        decimal fuelSpend = loggedFuelCost;
         decimal totalOpex = maintenanceCost + fuelSpend + otherExpenses;
         decimal netProfit = grossRevenue - totalOpex;
         decimal netMargin = grossRevenue > 0 ? (netProfit / grossRevenue) * 100m : 0m;
-        decimal costPerKm = (tripStats?.TotalDistanceKm > 0) ? (totalOpex / tripStats.TotalDistanceKm) : 0m;
+        decimal costPerKm = (tripStats?.TotalPlannedDistanceKm > 0)
+            ? totalOpex / tripStats.TotalPlannedDistanceKm
+            : 0m;
 
         return new FinancialKpiDto(
             TotalOpex: totalOpex,

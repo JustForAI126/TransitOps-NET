@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Truck, AlertCircle, Plus } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useTheme } from '../../context/ThemeContext';
-import { VehicleType, VehicleStatus } from '../../types';
+import { VehicleType } from '../../types';
 
 interface AddVehicleModalProps {
   isOpen: boolean;
@@ -21,7 +21,6 @@ export const AddVehicleModal: React.FC<AddVehicleModalProps> = ({ isOpen, onClos
   const [maxCapacityKg, setMaxCapacityKg] = useState<number>(1200);
   const [currentOdometerKm, setCurrentOdometerKm] = useState<number>(25000);
   const [acquisitionCost, setAcquisitionCost] = useState<number>(38000);
-  const [status, setStatus] = useState<VehicleStatus>('Available');
   const [region, setRegion] = useState('Mumbai West');
   const [error, setError] = useState<string | null>(null);
 
@@ -39,7 +38,7 @@ export const AddVehicleModal: React.FC<AddVehicleModalProps> = ({ isOpen, onClos
       maxCapacityKg: Number(maxCapacityKg),
       currentOdometerKm: Number(currentOdometerKm),
       acquisitionCost: Number(acquisitionCost),
-      status,
+      status: 'Available',
       region,
       documents: [
         { type: 'Fitness Certificate', expiryDate: '2027-10-15', status: 'Valid' },
@@ -147,6 +146,7 @@ export const AddVehicleModal: React.FC<AddVehicleModalProps> = ({ isOpen, onClos
               >
                 <option value="Van">Van</option>
                 <option value="Truck">Truck</option>
+                <option value="Heavy Truck">Heavy Truck</option>
                 <option value="Pickup">Pickup</option>
                 <option value="Semi-Trailer">Semi-Trailer</option>
                 <option value="Box Truck">Box Truck</option>
@@ -248,24 +248,7 @@ export const AddVehicleModal: React.FC<AddVehicleModalProps> = ({ isOpen, onClos
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1">
-              Initial Fleet Status
-            </label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as VehicleStatus)}
-              className={`w-full px-3 py-2 text-xs rounded-xl border outline-none font-medium cursor-pointer ${
-                isDark
-                  ? 'bg-[#191d26] border-[#272e3d] focus:border-[#ccff00] text-neutral-200'
-                  : 'bg-neutral-50 border-[#ded7ca] focus:border-[#d97706] text-neutral-800'
-              }`}
-            >
-              <option value="Available">Available (Ready for Dispatch)</option>
-              <option value="In Shop">In Shop (Maintenance Queue)</option>
-              <option value="Retired">Retired (Decommissioned)</option>
-            </select>
-          </div>
+          <p className="text-[11px] text-neutral-400">New vehicles enter the fleet as Available. Maintenance and retirement use their dedicated lifecycle actions.</p>
 
           <div className="flex items-center justify-end gap-3 pt-3">
             <button

@@ -12,8 +12,18 @@
       "type": "string"
     },
     {
-      "key": "token",
+      "key": "email",
+      "value": "admin@transitops.com",
+      "type": "string"
+    },
+    {
+      "key": "password",
       "value": "",
+      "type": "string"
+    },
+    {
+      "key": "fullName",
+      "value": "TransitOps User",
       "type": "string"
     }
   ],
@@ -22,7 +32,7 @@
       "name": "1. Authentication & Identity",
       "item": [
         {
-          "name": "Demo Login (Fleet Manager)",
+          "name": "Demo Login (Organization Admin)",
           "request": {
             "method": "POST",
             "header": [
@@ -30,7 +40,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"manager@transitops.com\",\n  \"role\": \"fleet_manager\"\n}"
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/auth/login",
@@ -40,7 +50,19 @@
           }
         },
         {
-          "name": "Register New Account (Isolated Tenant)",
+          "name": "List organization accounts (Organization Admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users"]
+            }
+          }
+        },
+        {
+          "name": "Create Fleet Manager account (Organization Admin)",
           "request": {
             "method": "POST",
             "header": [
@@ -48,12 +70,12 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"fullName\": \"Rajesh Sharma\",\n  \"email\": \"rajesh@logistics.in\",\n  \"password\": \"TransitOps@2026!\",\n  \"role\": \"fleet_manager\"\n}"
+              "raw": "{\n  \"fullName\": \"{{fullName}}\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"role\": \"FleetManager\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/auth/register",
+              "raw": "{{baseUrl}}/api/admin/users",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "register"]
+              "path": ["api", "admin", "users"]
             }
           }
         },

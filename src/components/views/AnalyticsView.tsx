@@ -13,7 +13,8 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useTheme } from '../../context/ThemeContext';
-import { ExpenseRecord } from '../../types';
+import { ExpenseType } from '../../types';
+import { formatRupees } from '../../utils/currency';
 
 export const AnalyticsView: React.FC = () => {
   const {
@@ -31,10 +32,11 @@ export const AnalyticsView: React.FC = () => {
   // Expense form state
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [expenseVehicleId, setExpenseVehicleId] = useState(vehicles[0]?.id || '');
-  const [expenseCategory, setExpenseCategory] = useState<ExpenseRecord['category']>('Fuel');
-  const [expenseAmount, setExpenseAmount] = useState<number>(120);
+  const [expenseCategory, setExpenseCategory] = useState<ExpenseType>('Fuel');
+  const [expenseAmount, setExpenseAmount] = useState<number>(0);
   const [expenseDesc, setExpenseDesc] = useState('');
-  const [fuelLiters, setFuelLiters] = useState<number>(30);
+  const [fuelLiters, setFuelLiters] = useState<number>(0);
+  const [expenseFormError, setExpenseFormError] = useState<string | null>(null);
 
   // Financial aggregates
   const totalRevenue = trips
@@ -42,14 +44,14 @@ export const AnalyticsView: React.FC = () => {
     .reduce((acc, t) => acc + t.revenue, 0);
 
   const totalFuelCost = expenses
-    .filter((e) => e.category === 'Fuel')
-    .reduce((acc, e) => acc + e.amount, 0);
+    .filter((e) => e.type === 'Fuel')
+    .reduce((acc, e) => acc + (e.amount ?? e.cost ?? 0), 0);
 
   const totalMaintenanceCost = maintenanceRecords.reduce((acc, m) => acc + m.cost, 0);
 
   const totalTollsAndMisc = expenses
-    .filter((e) => e.category !== 'Fuel')
-    .reduce((acc, e) => acc + e.amount, 0);
+    .filter((e) => e.type !== 'Fuel')
+    .reduce((acc, e) => acc + (e.amount ?? e.cost ?? 0), 0);
 
   const totalOperatingCost = totalFuelCost + totalMaintenanceCost + totalTollsAndMisc;
   const netOperatingProfit = totalRevenue - totalOperatingCost;
@@ -62,23 +64,28 @@ export const AnalyticsView: React.FC = () => {
     0
   );
   const fleetAverageKmPerLiter =
-    totalFuelConsumed > 0 ? (totalDistanceCompleted / totalFuelConsumed).toFixed(1) : '9.2';
+    totalFuelConsumed > 0 ? (totalDistanceCompleted / totalFuelConsumed).toFixed(1) : '0.0';
 
-  const handleAddExpenseSubmit = (e: React.FormEvent) => {
+  const handleAddExpenseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!expenseVehicleId) return;
 
-    addExpense({
+    setExpenseFormError(null);
+    const result = await addExpense({
       vehicleId: expenseVehicleId,
-      category: expenseCategory,
+      type: expenseCategory,
       amount: Number(expenseAmount),
       date: new Date().toISOString().split('T')[0],
       description: expenseDesc.trim() || `${expenseCategory} expense logged`,
       fuelLiters: expenseCategory === 'Fuel' ? Number(fuelLiters) : undefined,
     });
 
-    setShowAddExpense(false);
-    setExpenseDesc('');
+    if (result.success) {
+      setShowAddExpense(false);
+      setExpenseDesc('');
+    } else {
+      setExpenseFormError(result.error ?? 'Expense could not be saved.');
+    }
   };
 
   const handleExportAnalytics = () => {
@@ -174,7 +181,7 @@ export const AnalyticsView: React.FC = () => {
               <label className="block text-neutral-400 font-bold mb-1">Category</label>
               <select
                 value={expenseCategory}
-                onChange={(e) => setExpenseCategory(e.target.value as any)}
+                onChange={(e) => setExpenseCategory(e.target.value as ExpenseType)}
                 className={`w-full px-3 py-2 rounded-xl border outline-none font-medium ${
                   isDark
                     ? 'bg-[#14171e] border-[#272e3d] text-neutral-200'
@@ -183,11 +190,31 @@ export const AnalyticsView: React.FC = () => {
               >
                 <option value="Fuel">Fuel</option>
                 <option value="Toll">Toll</option>
+                <option value="Maintenance">Maintenance</option>
                 <option value="Insurance">Insurance</option>
-                <option value="Permits">Permits &amp; Taxes</option>
+                <option value="Permit">Permits &amp; Taxes</option>
                 <option value="Other">Other Misc</option>
               </select>
             </div>
+
+            {expenseCategory === 'Fuel' && (
+              <div>
+                <label className="block text-neutral-400 font-bold mb-1">Fuel volume (L)</label>
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  required
+                  value={fuelLiters}
+                  onChange={(event) => setFuelLiters(Number(event.target.value))}
+                  className={`w-full px-3 py-2 rounded-xl border outline-none font-mono font-bold ${
+                    isDark
+                      ? 'bg-[#14171e] border-[#272e3d] text-neutral-200'
+                      : 'bg-white border-[#ded7ca] text-neutral-800'
+                  }`}
+                />
+              </div>
+            )}
 
             <div>
               <label className="block text-neutral-400 font-bold mb-1">Amount (₹)</label>
@@ -238,6 +265,7 @@ export const AnalyticsView: React.FC = () => {
               Save Expense
             </button>
           </div>
+          {expenseFormError && <p role="alert" className="text-xs text-red-400">{expenseFormError}</p>}
         </form>
       )}
 
@@ -250,7 +278,7 @@ export const AnalyticsView: React.FC = () => {
         >
           <div className="text-xs text-neutral-400 mb-1">Completed Revenue</div>
           <div className="text-2xl font-extrabold text-emerald-400 font-mono">
-            ${totalRevenue.toLocaleString()}
+            {formatRupees(totalRevenue)}
           </div>
           <div className="text-[11px] text-neutral-500 mt-1">From completed customer trips</div>
         </div>
@@ -262,7 +290,7 @@ export const AnalyticsView: React.FC = () => {
         >
           <div className="text-xs text-neutral-400 mb-1">Total Operating Cost</div>
           <div className="text-2xl font-extrabold text-red-400 font-mono">
-            ${totalOperatingCost.toLocaleString()}
+            {formatRupees(totalOperatingCost)}
           </div>
           <div className="text-[11px] text-neutral-500 mt-1">Fuel + Maintenance + Tolls</div>
         </div>
@@ -278,7 +306,7 @@ export const AnalyticsView: React.FC = () => {
               netOperatingProfit >= 0 ? 'text-emerald-400' : 'text-red-400'
             }`}
           >
-            ${netOperatingProfit.toLocaleString()}
+            {formatRupees(netOperatingProfit)}
           </div>
           <div className="text-[11px] text-neutral-500 mt-1">Gross operational return</div>
         </div>
@@ -354,19 +382,19 @@ export const AnalyticsView: React.FC = () => {
                       </div>
                     </td>
                     <td className="py-3.5 font-mono">
-                      ${roi.acquisitionCost.toLocaleString()}
+                      {formatRupees(roi.acquisitionCost)}
                     </td>
                     <td className="py-3.5 font-mono text-emerald-400 font-semibold">
-                      ${roi.revenue.toLocaleString()}
+                      {formatRupees(roi.revenue)}
                     </td>
                     <td className="py-3.5 font-mono text-red-400">
-                      ${roi.maintenanceCost.toLocaleString()}
+                      {formatRupees(roi.maintenanceCost)}
                     </td>
                     <td className="py-3.5 font-mono text-amber-400">
-                      ${roi.fuelCost.toLocaleString()}
+                      {formatRupees(roi.fuelCost)}
                     </td>
                     <td className="py-3.5 font-mono font-bold">
-                      ${roi.profit.toLocaleString()}
+                      {formatRupees(roi.profit)}
                     </td>
                     <td className="py-3.5 text-right pr-4">
                       <span
@@ -427,14 +455,14 @@ export const AnalyticsView: React.FC = () => {
                     </td>
                     <td className="py-3">
                       <span className="px-2 py-0.5 rounded-md bg-neutral-500/10 border border-neutral-500/20 text-[11px] font-medium">
-                        {e.category}
+                        {e.type}
                       </span>
                     </td>
                     <td className="py-3 text-neutral-400">
                       {e.description} {e.fuelLiters ? `(${e.fuelLiters} Liters)` : ''}
                     </td>
                     <td className="py-3 text-right pr-4 font-mono font-bold text-sm">
-                      ${e.amount.toLocaleString()}
+                      {formatRupees(e.amount ?? e.cost ?? 0)}
                     </td>
                   </tr>
                 );

@@ -15,7 +15,7 @@ TransitOps uses a React/Vite client, an ASP.NET Core Web API, PostgreSQL through
 1. Install the JavaScript dependencies:
 
    ```powershell
-   npm install
+   npm --prefix frontend install
    ```
 
 2. Save backend secrets once with .NET User Secrets. The API project loads them automatically in Development. User Secrets are stored outside the repository, so you do not need to set environment variables each time you run the API. They are a local-development convenience, not an encrypted production secret store; use your deployment platform's secret manager in production.
@@ -49,10 +49,12 @@ TransitOps uses a React/Vite client, an ASP.NET Core Web API, PostgreSQL through
 4. In a second terminal, start the React client and Express bridge:
 
    ```powershell
-   npm run dev
+   npm --prefix frontend run dev
    ```
 
    Open `http://localhost:3000`. API requests and SignalR traffic are proxied to the ASP.NET Core service.
+
+   Frontend source, configuration, package manifests, and its local environment files live in `frontend\`. `npm --prefix frontend ...` lets you run the frontend scripts from the repository root; alternatively, change directory to `frontend\` first and run the same npm scripts there.
 
    If the frontend logs a `Premature close` while a browser request is being cancelled or navigated away from, the bridge treats that as a disconnected client and cancels the upstream request without reporting the API as unavailable. It also omits upstream content lengths when streaming responses, since response decompression can change the byte count. For a genuine `502 API unavailable`, check that the API is listening at `http://localhost:5000` and inspect the ASP.NET Core console for startup or database errors.
 

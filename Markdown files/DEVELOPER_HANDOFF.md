@@ -38,7 +38,7 @@ The intended users are Organization Admins, Fleet Managers, Drivers, Safety Offi
 |---|---|---|
 | Browser UI | React 19, TypeScript, Tailwind CSS 4 | Component-based role experiences, typed client models, and utility-based styling. |
 | Frontend tooling | Vite, TypeScript, npm (with a Bun lockfile also present) | Local development server, HMR, TypeScript checking, and production bundle. |
-| Development/full-stack host | Node.js, Express, `tsx` | `server.ts` serves the Vite app in development and forwards API/hub calls to ASP.NET Core. |
+| Development/full-stack host | Node.js, Express, `tsx` | `frontend/server.ts` serves the Vite app in development and forwards API/hub calls to ASP.NET Core. |
 | API | ASP.NET Core Web API, C# / .NET 10 preview target | Central place for business rules, validation, persistence, authorization, and integrations. |
 | Identity | ASP.NET Core Identity | User/account management and password hashing. Passwords are not stored or returned as plaintext. |
 | API authentication | JWT in an HttpOnly cookie | Browser authentication without storing bearer tokens in local storage. |
@@ -76,58 +76,65 @@ Generated directories such as `node_modules/`, `dist/`, `.NET bin/obj/`, and `.g
 | Path | Purpose |
 |---|---|
 | `.gitignore` | Excludes frontend dependencies/build outputs, .NET build/test outputs, local environment files, logs, and OS metadata. `.env.example` remains trackable. |
-| `.env.example` | Template for frontend-host values such as the Express port and API URL. It contains no real credentials. Backend secrets are configured separately using .NET User Secrets in Development or an approved deployment secret store. |
-| `package.json` | Frontend/Node dependency manifest and scripts: `dev`, `dev:dotnet`, `build`, `preview`, `clean`, `lint`, and `start`. |
-| `package-lock.json` | npm dependency resolution lockfile. Use npm commands so dependency changes keep this file synchronized. |
-| `bun.lock` | Bun lockfile; retained in the repository. Confirm the team’s package-manager policy before changing or removing it. |
-| `tsconfig.json` | TypeScript compiler options, strictness settings, and included source files. `npm run lint` currently runs `tsc --noEmit`. |
-| `vite.config.ts` | React and Tailwind Vite plugins, frontend aliases, development server, and direct API/hub/Swagger proxy configuration for `npm run dev:dotnet`. |
-| `server.ts` | Express development/full-stack host. It starts Vite middleware outside production, forwards `/api`, `/hubs`, and `/swagger` requests to ASP.NET Core, and serves built frontend files in production mode. |
-| `index.html` | HTML document shell, metadata, font preconnects, and the root element loaded by `src/main.tsx`. |
-| `metadata.json` | Project metadata consumed by the surrounding development environment; not the application database. |
+| `frontend/` | React/TypeScript application, frontend tooling, Node host, package manifests, and frontend-local environment configuration. See the frontend catalog below. |
 | `postman_collection.json` | Root copy of the Postman API collection for manual API testing. Keep in sync with `backend/TransitOps.Api/postman_collection.json` if both are maintained. |
-| `data/transitops_store.json` | Tracked JSON data snapshot. PostgreSQL, accessed through the API, is the authoritative persistence layer; check references before treating this snapshot as an active runtime store. |
 
-### `src/` — React frontend
+### `frontend/` — React application and tooling
+
+| Path | Purpose |
+|---|---|
+| `frontend/.env` | Local frontend environment values; ignored by Git. Do not put backend secrets here. |
+| `frontend/.env.example` | Trackable template for frontend-host values such as the Express port and API URL. Backend secrets are configured separately using .NET User Secrets in Development or an approved deployment secret store. |
+| `frontend/package.json` | Frontend/Node dependency manifest and scripts: `dev`, `dev:dotnet`, `build`, `preview`, `clean`, `lint`, and `start`. |
+| `frontend/package-lock.json` | npm dependency resolution lockfile. Use npm commands so dependency changes keep this file synchronized. |
+| `frontend/bun.lock` | Bun lockfile; retained in the repository. Confirm the team’s package-manager policy before changing or removing it. |
+| `frontend/tsconfig.json` | TypeScript compiler options, strictness settings, and included source files. `npm --prefix frontend run lint` runs `tsc --noEmit`. |
+| `frontend/vite.config.ts` | React and Tailwind Vite plugins, frontend aliases, development server, and direct API/hub/Swagger proxy configuration for `dev:dotnet`. |
+| `frontend/server.ts` | Express development/full-stack host. It starts Vite middleware outside production, forwards `/api`, `/hubs`, and `/swagger` requests to ASP.NET Core, and serves built frontend files in production mode. |
+| `frontend/index.html` | HTML document shell, metadata, font preconnects, and the root element loaded by `frontend/src/main.tsx`. |
+| `frontend/metadata.json` | Project metadata consumed by the surrounding development environment; not the application database. |
+| `frontend/data/transitops_store.json` | Tracked JSON data snapshot. PostgreSQL, accessed through the API, is the authoritative persistence layer; this snapshot is not used as the runtime store. |
+
+### `frontend/src/` — React frontend source
 
 | Path | Responsibility |
 |---|---|
-| `src/main.tsx` | Browser entry point. Mounts the React application and global CSS. |
-| `src/App.tsx` | Composes providers, route/view selection, role-allowed views, layout, global navigation, notifications, and modal lifecycles. It redirects unauthenticated protected navigation to login and constrains views by role; backend authorization remains authoritative. |
-| `src/index.css` | Global styles, Tailwind import/theme setup, and application-wide CSS. |
-| `src/types.ts` | Shared frontend domain types for roles, vehicles, drivers, trips, expenses, maintenance, users, and KPIs. |
-| `src/context/AppContext.tsx` | Central client state and workflows: session verification/login/logout, role and view state, API data loading, operational mutations, SignalR subscriptions, notifications, filters, KPIs, ROI, and CSV generation. |
-| `src/context/ThemeContext.tsx` | Theme state/provider used by components to render light/dark palettes. |
-| `src/services/api.ts` | Typed frontend API wrapper. Sends cookies with requests, parses API errors, normalizes selected API enum/field values, and exposes authentication, entity, and report operations. |
-| `src/services/signalr.ts` | SignalR connection lifecycle and event-to-client callback dispatch. |
-| `src/utils/currency.ts` | Shared INR formatting helpers. |
-| `src/data/initialData.ts` | Frontend-side initial/example data definitions. The persisted runtime source is PostgreSQL; inspect actual imports before relying on this data for production behavior. |
-| `src/components/Navbar.tsx` | Top navigation, brand identity, theme control, notifications, role context, and sign-out/quick actions. |
-| `src/components/Sidebar.tsx` | Role-filtered application navigation and workspace counters. These visible navigation rules are UX only, not API security. |
-| `src/components/NotificationToast.tsx` | Displays transient application notifications. |
-| `src/components/SplashScreen.tsx` | Intro/loading presentation shown during the initial splash state. |
-| `src/components/views/HeroView.tsx` | Public product landing page and entry point to sign in. |
-| `src/components/views/AuthViews.tsx` | Login interface and legacy registration component. Public registration is not part of the intended account-provisioning flow. |
-| `src/components/views/DashboardView.tsx` | Chooses the role-specific dashboard and displays loading/error/retry state or first-use onboarding. |
-| `src/components/views/OrganizationAdminDashboard.tsx` | Lists organization users and creates tenant-scoped Fleet Manager, Driver, Safety Officer, and Financial Analyst accounts. Driver account creation also includes driver profile information. |
-| `src/components/views/VehiclesView.tsx` | Vehicle search/list/detail, lifecycle/status actions, and vehicle-related display/export behavior. |
-| `src/components/views/DriversView.tsx` | Driver list/detail, licence/safety indicators, and authorized driver actions. |
-| `src/components/views/TripsView.tsx` | Trip planning and trip queue/dispatch/completion/cancellation interface, with available trip receipt export. |
-| `src/components/views/MaintenanceView.tsx` | Maintenance work order listing, creation, and closure UI, subject to role rules. |
-| `src/components/views/ExpensesView.tsx` | Fuel and other expense viewing and supported expense actions. |
-| `src/components/views/ReportsView.tsx` | Financial and vehicle ROI summaries, filters/sorts, CSV export controls, and role-specific PDF downloads. |
-| `src/components/views/AnalyticsView.tsx` | Analytics presentation using current workspace metrics and shared app data. |
-| `src/components/dashboard/FleetManagerDashboard.tsx` | Fleet KPIs, vehicle filters, dispatch overview, operational attention items, and Fleet Manager actions. |
-| `src/components/dashboard/DriverDashboard.tsx` | Driver-focused trip/dispatch dashboard. |
-| `src/components/dashboard/SafetyOfficerDashboard.tsx` | Licence, driver safety, and active maintenance safety dashboard. |
-| `src/components/dashboard/FinancialAnalystDashboard.tsx` | Financial analysis and cost/revenue dashboard. |
-| `src/components/dashboard/GettingStartedGuide.tsx` | First-use guidance and actions for non-demo organizations with a clean workspace. |
-| `src/components/dashboard/LiveRouteRadar.tsx` | Visualizes persisted active trip routes. It does not represent live GPS because location coordinates are not modeled. |
-| `src/components/modals/AddVehicleModal.tsx` | Vehicle creation form and client-side feedback. API validators and controller checks must still be used. |
-| `src/components/modals/AddDriverModal.tsx` | Driver creation form, licence category choices, and error feedback. |
-| `src/components/modals/CreateTripModal.tsx` | Trip draft creation and vehicle/driver selection. |
-| `src/components/modals/CompleteTripModal.tsx` | Captures final odometer/fuel details for completion. |
-| `src/components/modals/LogMaintenanceModal.tsx` | Creates maintenance work orders. |
+| `frontend/src/main.tsx` | Browser entry point. Mounts the React application and global CSS. |
+| `frontend/src/App.tsx` | Composes providers, route/view selection, role-allowed views, layout, global navigation, notifications, and modal lifecycles. It redirects unauthenticated protected navigation to login and constrains views by role; backend authorization remains authoritative. |
+| `frontend/src/index.css` | Global styles, Tailwind import/theme setup, and application-wide CSS. |
+| `frontend/src/types.ts` | Shared frontend domain types for roles, vehicles, drivers, trips, expenses, maintenance, users, and KPIs. |
+| `frontend/src/context/AppContext.tsx` | Central client state and workflows: session verification/login/logout, role and view state, API data loading, operational mutations, SignalR subscriptions, notifications, filters, KPIs, ROI, and CSV generation. |
+| `frontend/src/context/ThemeContext.tsx` | Theme state/provider used by components to render light/dark palettes. |
+| `frontend/src/services/api.ts` | Typed frontend API wrapper. Sends cookies with requests, parses API errors, normalizes selected API enum/field values, and exposes authentication, entity, and report operations. |
+| `frontend/src/services/signalr.ts` | SignalR connection lifecycle and event-to-client callback dispatch. |
+| `frontend/src/utils/currency.ts` | Shared INR formatting helpers. |
+| `frontend/src/data/initialData.ts` | Frontend-side initial/example data definitions. The persisted runtime source is PostgreSQL; inspect actual imports before relying on this data for production behavior. |
+| `frontend/src/components/Navbar.tsx` | Top navigation, brand identity, theme control, notifications, role context, and sign-out/quick actions. |
+| `frontend/src/components/Sidebar.tsx` | Role-filtered application navigation and workspace counters. These visible navigation rules are UX only, not API security. |
+| `frontend/src/components/NotificationToast.tsx` | Displays transient application notifications. |
+| `frontend/src/components/SplashScreen.tsx` | Intro/loading presentation shown during the initial splash state. |
+| `frontend/src/components/views/HeroView.tsx` | Public product landing page and entry point to sign in. |
+| `frontend/src/components/views/AuthViews.tsx` | Login interface and legacy registration component. Public registration is not part of the intended account-provisioning flow. |
+| `frontend/src/components/views/DashboardView.tsx` | Chooses the role-specific dashboard and displays loading/error/retry state or first-use onboarding. |
+| `frontend/src/components/views/OrganizationAdminDashboard.tsx` | Lists organization users and creates tenant-scoped Fleet Manager, Driver, Safety Officer, and Financial Analyst accounts. Driver account creation also includes driver profile information. |
+| `frontend/src/components/views/VehiclesView.tsx` | Vehicle search/list/detail, lifecycle/status actions, and vehicle-related display/export behavior. |
+| `frontend/src/components/views/DriversView.tsx` | Driver list/detail, licence/safety indicators, and authorized driver actions. |
+| `frontend/src/components/views/TripsView.tsx` | Trip planning and trip queue/dispatch/completion/cancellation interface, with available trip receipt export. |
+| `frontend/src/components/views/MaintenanceView.tsx` | Maintenance work order listing, creation, and closure UI, subject to role rules. |
+| `frontend/src/components/views/ExpensesView.tsx` | Fuel and other expense viewing and supported expense actions. |
+| `frontend/src/components/views/ReportsView.tsx` | Financial and vehicle ROI summaries, filters/sorts, CSV export controls, and role-specific PDF downloads. |
+| `frontend/src/components/views/AnalyticsView.tsx` | Analytics presentation using current workspace metrics and shared app data. |
+| `frontend/src/components/dashboard/FleetManagerDashboard.tsx` | Fleet KPIs, vehicle filters, dispatch overview, operational attention items, and Fleet Manager actions. |
+| `frontend/src/components/dashboard/DriverDashboard.tsx` | Driver-focused trip/dispatch dashboard. |
+| `frontend/src/components/dashboard/SafetyOfficerDashboard.tsx` | Licence, driver safety, and active maintenance safety dashboard. |
+| `frontend/src/components/dashboard/FinancialAnalystDashboard.tsx` | Financial analysis and cost/revenue dashboard. |
+| `frontend/src/components/dashboard/GettingStartedGuide.tsx` | First-use guidance and actions for non-demo organizations with a clean workspace. |
+| `frontend/src/components/dashboard/LiveRouteRadar.tsx` | Visualizes persisted active trip routes. It does not represent live GPS because location coordinates are not modeled. |
+| `frontend/src/components/modals/AddVehicleModal.tsx` | Vehicle creation form and client-side feedback. API validators and controller checks must still be used. |
+| `frontend/src/components/modals/AddDriverModal.tsx` | Driver creation form, licence category choices, and error feedback. |
+| `frontend/src/components/modals/CreateTripModal.tsx` | Trip draft creation and vehicle/driver selection. |
+| `frontend/src/components/modals/CompleteTripModal.tsx` | Captures final odometer/fuel details for completion. |
+| `frontend/src/components/modals/LogMaintenanceModal.tsx` | Creates maintenance work orders. |
 
 ### `backend/` — ASP.NET Core solution
 
@@ -189,10 +196,10 @@ Generated directories such as `node_modules/`, `dist/`, `.NET bin/obj/`, and `.g
 The normal local setup uses two processes:
 
 1. `dotnet run --project backend\TransitOps.Api\TransitOps.Api.csproj` starts the API on the configured localhost URL (typically `http://localhost:5000`).
-2. `npm run dev` starts `server.ts` on `http://localhost:3000`, with Vite middleware for the React app.
+2. `npm --prefix frontend run dev` starts `frontend/server.ts` on `http://localhost:3000`, with Vite middleware for the React app.
 3. Browser calls to `/api`, `/hubs`, and `/swagger` pass through the Express bridge to the API. The browser therefore uses the frontend origin while the Node server contacts ASP.NET Core.
-4. `npm run dev:dotnet` runs Vite directly; its proxy uses `VITE_BACKEND_URL` when supplied, otherwise `http://localhost:5000`.
-5. `npm run build` produces the frontend production bundle in `dist/`.
+4. `npm --prefix frontend run dev:dotnet` runs Vite directly; its proxy uses `VITE_BACKEND_URL` when supplied, otherwise `http://localhost:5000`.
+5. `npm --prefix frontend run build` produces the frontend production bundle in `frontend/dist/`.
 
 The API must be running and reachable for authentication, persisted data, report generation, and real-time connections. A frontend server can start even while the API is down; that does not imply the API is healthy.
 
@@ -327,7 +334,7 @@ Follow [`SETUP_GUIDE.md`](./SETUP_GUIDE.md) for exact setup commands.
 Minimum operational checklist:
 
 1. Install Node.js/npm and the .NET SDK version matching the solution.
-2. Install frontend dependencies with `npm install`.
+2. Install frontend dependencies with `npm --prefix frontend install`.
 3. Configure `ConnectionStrings:DefaultConnection`, `Jwt:Key`, and `DemoAccounts:Password` with .NET User Secrets for Development. Never commit secret values.
 4. Run PostgreSQL (or configure a reachable PostgreSQL/Supabase connection).
 5. Start ASP.NET Core, then start the frontend host in a second terminal.
@@ -337,15 +344,15 @@ Minimum operational checklist:
 Useful commands from the repository root:
 
 ```powershell
-npm install
-npm run lint
-npm run build
-npm run dev
+npm --prefix frontend install
+npm --prefix frontend run lint
+npm --prefix frontend run build
+npm --prefix frontend run dev
 dotnet build backend\TransitOps.sln
 dotnet run --project backend\TransitOps.Api\TransitOps.Api.csproj
 ```
 
-`npm run dev` uses Express and `DOTNET_API_URL`; `npm run dev:dotnet` uses Vite’s proxy and `VITE_BACKEND_URL`. Do not assume those variable names are interchangeable. Backend secrets are independent of frontend `.env` files.
+`npm --prefix frontend run dev` uses Express and `DOTNET_API_URL`; `npm --prefix frontend run dev:dotnet` uses Vite’s proxy and `VITE_BACKEND_URL`. Do not assume those variable names are interchangeable. Backend secrets are independent of frontend `.env` files. The frontend package scripts can also be run after changing the working directory to `frontend\`.
 
 ## 9. Developer guidance and known decisions
 
@@ -369,7 +376,7 @@ dotnet run --project backend\TransitOps.Api\TransitOps.Api.csproj
 - **Dashboard averages:** ROI PDF averages are explicit report averages. Do not present them as a time-windowed KPI; no reporting-period selector is currently defined.
 - **Schema changes:** there are no EF migration files in the current source inventory. Startup’s `EnsureCreated()` is insufficient to evolve a previously created production database.
 - **Documentation drift:** the older architecture guide includes illustrative architectural language and examples. Verify all claims against actual source before using them as a specification.
-- **Local JSON snapshot:** PostgreSQL is the runtime backend source of truth. Confirm whether `data/transitops_store.json` still has a supported use before changing or removing it.
+- **Local JSON snapshot:** PostgreSQL is the runtime backend source of truth. `frontend/data/transitops_store.json` is a retained snapshot and is not the runtime data store.
 
 ## 10. Viva questions and answers
 
@@ -464,10 +471,12 @@ dotnet run --project backend\TransitOps.Api\TransitOps.Api.csproj
 27. **Why run the frontend and backend in separate terminals?**  
     The frontend host provides the browser application and proxy, while ASP.NET Core owns API, authentication, business rules, and database access.
 
-28. **What does `npm run lint` currently check?**  
+28. **What does `npm --prefix frontend run lint` currently check?**
+
     It runs the TypeScript compiler with `--noEmit`; it is a type-check command, not a full ESLint rule set.
 
-29. **What does `npm run build` verify?**  
+29. **What does `npm --prefix frontend run build` verify?**
+
     It bundles the production React/Vite frontend. It does not test database connectivity or backend behavior.
 
 30. **What is the purpose of `.gitignore`?**  

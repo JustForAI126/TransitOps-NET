@@ -1,8 +1,8 @@
 {
   "info": {
-    "name": "TransitOps API Collection (.NET 10 & Express Full-Stack)",
+    "name": "TransitOps ASP.NET Core API Collection",
     "_postman_id": "c1f7a812-4291-4d7a-8f92-b8832a819b91",
-    "description": "Production Postman collection for TransitOps: Smart Transport Operations Platform. Includes RBAC auth, vehicles, drivers, dispatches, maintenance work orders, and financial analytics.",
+    "description": "Postman requests for the PostgreSQL-backed TransitOps API. Authentication uses the HttpOnly JWT cookie set by login; configure email/password variables and let Postman retain cookies.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -13,7 +13,7 @@
     },
     {
       "key": "email",
-      "value": "admin@transitops.com",
+      "value": "",
       "type": "string"
     },
     {
@@ -25,6 +25,11 @@
       "key": "fullName",
       "value": "TransitOps User",
       "type": "string"
+    },
+    {
+      "key": "driverId",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
@@ -32,11 +37,14 @@
       "name": "1. Authentication & Identity",
       "item": [
         {
-          "name": "Demo Login (Organization Admin)",
+          "name": "Login with email and password (sets cookie)",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -44,8 +52,14 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "login"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
             }
           }
         },
@@ -56,8 +70,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/admin/users",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "users"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users"
+              ]
             }
           }
         },
@@ -66,7 +86,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -74,8 +97,14 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/admin/users",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "users"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users"
+              ]
             }
           }
         },
@@ -83,13 +112,17 @@
           "name": "Get Current Profile (Me)",
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
-            ],
+            "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/auth/me",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "me"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me"
+              ]
             }
           }
         }
@@ -102,13 +135,16 @@
           "name": "List All Vehicles",
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
-            ],
+            "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/vehicles",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "vehicles"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "vehicles"
+              ]
             }
           }
         },
@@ -117,8 +153,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -126,8 +164,13 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/vehicles",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "vehicles"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "vehicles"
+              ]
             }
           }
         }
@@ -140,13 +183,16 @@
           "name": "List Drivers",
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
-            ],
+            "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/drivers",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "drivers"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "drivers"
+              ]
             }
           }
         },
@@ -155,18 +201,85 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Suresh Patel\",\n  \"email\": \"suresh.p@transitops.com\",\n  \"contactNumber\": \"+91 98200 11223\",\n  \"licenseNumber\": \"DL-MH-04-20230099\",\n  \"licenseCategory\": \"Heavy Transport Vehicle (HMV)\",\n  \"licenseExpiryDate\": \"2027-05-15\"\n}"
+              "raw": "{\n  \"name\": \"Suresh Patel\",\n  \"email\": \"suresh.p@transitops.com\",\n  \"contactNumber\": \"+91 98200 11223\",\n  \"licenseNumber\": \"MH12 20210098765\",\n  \"licenseCategory\": \"HGMV\",\n  \"licenseExpiryDate\": \"2027-05-15\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/drivers",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "drivers"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "drivers"
+              ]
             }
+          }
+        },
+        {
+          "name": "Safety score breakdown",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/drivers/{{driverId}}/safety-score",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "drivers",
+                "{{driverId}}",
+                "safety-score"
+              ]
+            },
+            "description": "Fleet Manager or Safety Officer. Shows each factor of the calculated score."
+          }
+        },
+        {
+          "name": "Record safety incident",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/drivers/{{driverId}}/incidents",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "drivers",
+                "{{driverId}}",
+                "incidents"
+              ]
+            },
+            "description": "Fleet Manager or Safety Officer. Adds one incident and recalculates the score."
+          }
+        },
+        {
+          "name": "Send licence reminder email",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/drivers/{{driverId}}/send-license-reminder",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "drivers",
+                "{{driverId}}",
+                "send-license-reminder"
+              ]
+            },
+            "description": "Fleet Manager or Safety Officer. Demo-tenant drivers are not emailed."
           }
         }
       ]
@@ -179,8 +292,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -188,8 +303,13 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/trips",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "trips"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "trips"
+              ]
             }
           }
         },
@@ -197,13 +317,18 @@
           "name": "Atomic Dispatch Trip",
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
-            ],
+            "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/trips/TRIP_ID/dispatch",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "trips", "TRIP_ID", "dispatch"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "trips",
+                "TRIP_ID",
+                "dispatch"
+              ]
             }
           }
         },
@@ -212,8 +337,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -221,8 +348,15 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/trips/TRIP_ID/complete",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "trips", "TRIP_ID", "complete"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "trips",
+                "TRIP_ID",
+                "complete"
+              ]
             }
           }
         }
@@ -235,13 +369,17 @@
           "name": "Fleet Manager KPIs",
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
-            ],
+            "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/kpi/fleet",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "kpi", "fleet"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "kpi",
+                "fleet"
+              ]
             }
           }
         },
@@ -249,13 +387,17 @@
           "name": "Financial Analyst KPIs (INR ₹)",
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
-            ],
+            "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/kpi/financial",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "kpi", "financial"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "kpi",
+                "financial"
+              ]
             }
           }
         },
@@ -263,13 +405,17 @@
           "name": "Safety Compliance KPIs",
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
-            ],
+            "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/kpi/safety",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "kpi", "safety"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "kpi",
+                "safety"
+              ]
             }
           }
         }
@@ -282,13 +428,19 @@
           "name": "Export Trips CSV (CsvHelper)",
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
-            ],
+            "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/reports/export/csv/trips",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "reports", "export", "csv", "trips"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "export",
+                "csv",
+                "trips"
+              ]
             }
           }
         },
@@ -296,13 +448,19 @@
           "name": "Export Financial Ledger PDF (QuestPDF)",
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}" }
-            ],
+            "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/reports/export/pdf/ledger",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "reports", "export", "pdf", "ledger"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "export",
+                "pdf",
+                "ledger"
+              ]
             }
           }
         }

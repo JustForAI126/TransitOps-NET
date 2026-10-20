@@ -76,8 +76,12 @@ Generated directories such as `node_modules/`, `dist/`, `.NET bin/obj/`, and `.g
 | Path | Purpose |
 |---|---|
 | `.gitignore` | Excludes frontend dependencies/build outputs, .NET build/test outputs, local environment files, logs, and OS metadata. `.env.example` remains trackable. |
+| `README.md` | Project overview, folder layout and quick start. |
 | `frontend/` | React/TypeScript application, frontend tooling, Node host, package manifests, and frontend-local environment configuration. See the frontend catalog below. |
-| `postman_collection.json` | Root copy of the Postman API collection for manual API testing. Keep in sync with `backend/TransitOps.Api/postman_collection.json` if both are maintained. |
+| `backend/` | ASP.NET Core solution (API, Application, Domain, Infrastructure, Tests). |
+| `database/` | Supabase row-level-security SQL scripts. |
+| `docs/` | Guides, UML diagrams (`docs/uml`) and sample outputs (`docs/samples`). |
+| `.github/workflows/ci.yml` | Builds and tests the backend and type-checks/builds the frontend on every push and pull request. |
 
 ### `frontend/` — React application and tooling
 
@@ -87,13 +91,10 @@ Generated directories such as `node_modules/`, `dist/`, `.NET bin/obj/`, and `.g
 | `frontend/.env.example` | Trackable template for frontend-host values such as the Express port and API URL. Backend secrets are configured separately using .NET User Secrets in Development or an approved deployment secret store. |
 | `frontend/package.json` | Frontend/Node dependency manifest and scripts: `dev`, `dev:dotnet`, `build`, `preview`, `clean`, `lint`, and `start`. |
 | `frontend/package-lock.json` | npm dependency resolution lockfile. Use npm commands so dependency changes keep this file synchronized. |
-| `frontend/bun.lock` | Bun lockfile; retained in the repository. Confirm the team’s package-manager policy before changing or removing it. |
 | `frontend/tsconfig.json` | TypeScript compiler options, strictness settings, and included source files. `npm --prefix frontend run lint` runs `tsc --noEmit`. |
 | `frontend/vite.config.ts` | React and Tailwind Vite plugins, frontend aliases, development server, and direct API/hub/Swagger proxy configuration for `dev:dotnet`. |
 | `frontend/server.ts` | Express development/full-stack host. It starts Vite middleware outside production, forwards `/api`, `/hubs`, and `/swagger` requests to ASP.NET Core, and serves built frontend files in production mode. |
 | `frontend/index.html` | HTML document shell, metadata, font preconnects, and the root element loaded by `frontend/src/main.tsx`. |
-| `frontend/metadata.json` | Project metadata consumed by the surrounding development environment; not the application database. |
-| `frontend/data/transitops_store.json` | Tracked JSON data snapshot. PostgreSQL, accessed through the API, is the authoritative persistence layer; this snapshot is not used as the runtime store. |
 
 ### `frontend/src/` — React frontend source
 
@@ -108,7 +109,7 @@ Generated directories such as `node_modules/`, `dist/`, `.NET bin/obj/`, and `.g
 | `frontend/src/services/api.ts` | Typed frontend API wrapper. Sends cookies with requests, parses API errors, normalizes selected API enum/field values, and exposes authentication, entity, and report operations. |
 | `frontend/src/services/signalr.ts` | SignalR connection lifecycle and event-to-client callback dispatch. |
 | `frontend/src/utils/currency.ts` | Shared INR formatting helpers. |
-| `frontend/src/data/initialData.ts` | Frontend-side initial/example data definitions. The persisted runtime source is PostgreSQL; inspect actual imports before relying on this data for production behavior. |
+| `frontend/src/utils/indianFormats.ts` | Indian registration/licence format checks for form feedback (mirrors the backend rules). |
 | `frontend/src/components/Navbar.tsx` | Top navigation, brand identity, theme control, notifications, role context, and sign-out/quick actions. |
 | `frontend/src/components/Sidebar.tsx` | Role-filtered application navigation and workspace counters. These visible navigation rules are UX only, not API security. |
 | `frontend/src/components/NotificationToast.tsx` | Displays transient application notifications. |
@@ -175,24 +176,26 @@ Generated directories such as `node_modules/`, `dist/`, `.NET bin/obj/`, and `.g
 | `backend/TransitOps.Api/Controllers/KpiController.cs` | Role-protected API endpoints for Fleet, Driver, Safety, and Financial KPI data. |
 | `backend/TransitOps.Api/Controllers/ReportsController.cs` | CSV trip export and role-protected financial ledger, vehicle ROI, and trip receipt PDF exports. |
 | `backend/TransitOps.Api/Controllers/DocsController.cs` | API endpoint for exposing the Postman collection/documentation payload. |
-| `backend/TransitOps.Api/postman_collection.json` | Backend-local Postman collection copy. Keep in sync with the root copy when changing endpoints. |
+| `backend/TransitOps.Api/postman_collection.json` | The single Postman collection; also served by `GET /api/docs/postman`. |
 | `backend/TransitOps.Api/Reports.http` | HTTP-client example for signing in as a Development Fleet Manager and downloading the ROI PDF. |
 
-### `db scripts/`
+### `database/`
 
 | Path | Responsibility |
 |---|---|
-| `db scripts/SUPABASE_RLS_FIX.sql` | Supabase/PostgreSQL RLS repair/setup script. Review before execution against a real database; it is not a substitute for API tenant filtering. |
-| `db scripts/supabase-rls-setup.sql` | Supabase RLS setup script. Apply only to the intended database and understand each policy before running it. |
+| `database/supabase-rls-fix.sql` | Supabase/PostgreSQL RLS repair/setup script. Review before execution against a real database; it is not a substitute for API tenant filtering. |
+| `database/supabase-rls-setup.sql` | Supabase RLS setup script. Apply only to the intended database and understand each policy before running it. |
 
-### `Markdown files/`
+### `docs/`
 
 | Path | Responsibility |
 |---|---|
-| `Markdown files/DEVELOPER_HANDOFF.md` | This implementation-aware architecture, execution, and viva guide. |
-| `Markdown files/SETUP_GUIDE.md` | Local configuration and startup instructions, credentials guidance, and operating notes. |
-| `Markdown files/ACCESS_AND_KPI.md` | Detailed role/resource permission matrix, tenant boundaries, KPI formulas, ROI definition, and open product decisions. |
-| `Markdown files/TRANSITOPS_ARCHITECTURE_GUIDE.md` | Additional junior-developer domain and architecture explanation. Compare its examples with current code; it may contain illustrative or older design descriptions. |
+| `docs/DEVELOPER_HANDOFF.md` | This implementation-aware architecture, execution, and viva guide. |
+| `docs/SETUP_GUIDE.md` | Local configuration and startup instructions, credentials guidance, and operating notes. |
+| `docs/ACCESS_AND_KPI.md` | Detailed role/resource permission matrix, tenant boundaries, KPI formulas, ROI definition, safety score, Indian format rules and open product decisions. |
+| `docs/TRANSITOPS_ARCHITECTURE_GUIDE.md` | Additional junior-developer domain and architecture explanation. Compare its examples with current code; it may contain illustrative or older design descriptions. |
+| `docs/uml/` | Mermaid UML diagrams (use case, architecture, class, ER, state, sequence, activity); open `uml-viewer.html`, rebuild with `node build-viewer.mjs`. |
+| `docs/samples/subscription-receipt.pdf` | Example of the emailed QuestPDF subscription receipt. |
 
 ## 4. Application execution flow
 
@@ -378,11 +381,10 @@ dotnet run --project backend\TransitOps.Api\TransitOps.Api.csproj
 - **Subscription billing:** the current checkout is a one-time Razorpay charge for a fixed configured term. It does not auto-renew and does not implement Razorpay Subscriptions.
 - **Onboarding configuration:** email verification requires SMTP; payment order creation/verification requires Test Mode Razorpay credentials. Missing configuration fails closed rather than simulating success.
 - **KPI scope:** frontend filtered Fleet Manager cards and backend tenant-wide KPI endpoints do not necessarily share exactly the same scope.
-- **Uniqueness scope:** current normalized uniqueness indexes are global for the protected values, not tenant-local; changing this requires a product/data migration decision.
+- **Uniqueness scope:** vehicle registration and driver licence numbers are unique per tenant (migration `TenantScopedRegistrationAndLicenceUniqueness`); driver email remains globally unique.
 - **Dashboard averages:** ROI PDF averages are explicit report averages. Do not present them as a time-windowed KPI; no reporting-period selector is currently defined.
 - **Schema changes:** SaaS onboarding adds idempotent EF migrations. `EnsureCreated()` still initializes only fresh databases and must not be treated as a general schema-upgrade mechanism.
 - **Documentation drift:** the older architecture guide includes illustrative architectural language and examples. Verify all claims against actual source before using them as a specification.
-- **Local JSON snapshot:** PostgreSQL is the runtime backend source of truth. `frontend/data/transitops_store.json` is a retained snapshot and is not the runtime data store.
 
 ## 10. Viva questions and answers
 

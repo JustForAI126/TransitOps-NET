@@ -201,7 +201,7 @@ The database connection must be held only by the backend. Tenant filtering and r
 
 - Swagger: `http://localhost:5000/swagger` (when enabled for the current environment)
 - SignalR: `http://localhost:5000/hubs/transitops`
-- Postman collection: import [`postman_collection.json`](../postman_collection.json). Use the same host as `baseUrl`, configure the Development demo login, then log in. Postman should retain the HttpOnly cookie in its cookie jar; bearer-token headers are not used.
+- Postman collection: import [`postman_collection.json`](../backend/TransitOps.Api/postman_collection.json) (also downloadable from `GET /api/docs/postman`). Use the same host as `baseUrl`, configure the Development demo login, then log in. Postman should retain the HttpOnly cookie in its cookie jar; bearer-token headers are not used.
 - Reports: endpoints are protected by role policies. CSV and PDF services use CsvHelper and QuestPDF.
 - Financial Analysts can download a QuestPDF financial ledger from Reports; Fleet Managers can download turn-in receipts for tenant trips, and Drivers can download receipts only for their own assigned trips.
 - Fleet Managers can download a QuestPDF vehicle ROI summary. It includes the fleet dashboard counts/utilization and averages for completed-trip revenue and distance, operating cost/profit per vehicle, and vehicle ROI. Vehicle ROI is operating profit (completed-trip revenue minus maintenance and fuel) divided by acquisition cost; capital cost is not deducted again as an operating expense.

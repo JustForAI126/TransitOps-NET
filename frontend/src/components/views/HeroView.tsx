@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   Truck,
@@ -13,15 +13,35 @@ import {
   Cpu,
   BarChart,
   UserCheck,
+  CreditCard,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useTheme } from '../../context/ThemeContext';
+import { api, SubscriptionPlan } from '../../services/api';
 import { UserRole } from '../../types';
 
 export const HeroView: React.FC = () => {
   const { setActiveView, currentUser } = useApp();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+  const [plansLoading, setPlansLoading] = useState(true);
+  const [plansError, setPlansError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void api.onboarding.getPlans()
+      .then(result => {
+        if (active) setPlans(result);
+      })
+      .catch((requestError: unknown) => {
+        if (active) setPlansError(requestError instanceof Error ? requestError.message : 'Subscription plans could not be loaded.');
+      })
+      .finally(() => {
+        if (active) setPlansLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
 
   const headlineContainer: any = {
     hidden: { opacity: 0 },
@@ -60,6 +80,19 @@ export const HeroView: React.FC = () => {
   ];
 
   const handleRoleSelect = (_role: UserRole) => setActiveView('login');
+  const selectPlan = (planId: string) => {
+    if (currentUser) {
+      setActiveView('dashboard');
+      return;
+    }
+    setActiveView('purchase');
+    window.history.replaceState(window.history.state, '', `/purchase?plan=${encodeURIComponent(planId)}`);
+  };
+  const formatPlanPrice = (plan: SubscriptionPlan) => new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: plan.currency,
+    maximumFractionDigits: 0,
+  }).format(plan.amountPaise / 100);
 
   return (
     <div className="min-h-screen pb-20">
@@ -184,7 +217,7 @@ export const HeroView: React.FC = () => {
               >
                 <button
                   onClick={() => {
-                    setActiveView(currentUser ? 'dashboard' : 'login');
+                    setActiveView(currentUser ? 'dashboard' : 'purchase');
                   }}
                   className={`px-6 py-3 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center gap-2 ${
                     isDark
@@ -192,7 +225,7 @@ export const HeroView: React.FC = () => {
                       : 'bg-[#d97706] text-white hover:bg-[#b45309] shadow-amber-500/20'
                   }`}
                 >
-                  <span>Launch Fleet Command</span>
+                  <span>{currentUser ? 'Launch Fleet Command' : 'Choose a plan'}</span>
                   <ArrowRight className="w-4 h-4 stroke-[2.5]" />
                 </button>
                 <button
@@ -886,6 +919,85 @@ export const HeroView: React.FC = () => {
         </div>
       </section>
 
+      <section id="pricing" className="border-y border-inherit py-20 scroll-mt-8">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto mb-10 max-w-2xl text-center">
+            <div className={`mb-3 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold ${
+              isDark ? 'border-[#293242] bg-[#181d27] text-[#ccff00]' : 'border-amber-200 bg-amber-50 text-amber-800'
+            }`}>
+              <CreditCard className="h-3.5 w-3.5" />
+              SUBSCRIPTION PLANS
+            </div>
+            <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Choose the right plan for your fleet</h2>
+            <p className="mt-3 text-sm leading-relaxed text-neutral-500 dark:text-neutral-400">
+              Clear, fixed-term pricing for your organization. Verify your email before checkout; payments are processed securely by Razorpay.
+            </p>
+          </div>
+
+          {plansError && (
+            <div role="alert" className="mx-auto mb-6 max-w-2xl rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-300">
+              {plansError}
+            </div>
+          )}
+
+          {plansLoading ? (
+            <p role="status" className="text-center text-sm text-neutral-500">Loading subscription plans…</p>
+          ) : plans.length > 0 ? (
+            <div className="grid gap-5 md:grid-cols-3">
+              {plans.map(plan => (
+                <motion.article
+                  key={plan.id}
+                  whileHover={{ y: -4 }}
+                  className={`flex flex-col rounded-2xl border p-6 shadow-lg ${
+                    isDark
+                      ? 'border-[#293242] bg-[#14171e]'
+                      : 'border-[#e5dfd2] bg-white shadow-amber-950/5'
+                  }`}
+                >
+                  <div className="mb-5">
+                    <h3 className="text-lg font-extrabold">{plan.name}</h3>
+                    <p className="mt-1 text-xs text-neutral-500">Fleet operations subscription</p>
+                  </div>
+                  <div className="mb-1 flex items-baseline gap-2">
+                    <span className="text-3xl font-black tracking-tight">{formatPlanPrice(plan)}</span>
+                  </div>
+                  <p className="text-xs text-neutral-500">
+                    one-time payment for {plan.termMonths} {plan.termMonths === 1 ? 'month' : 'months'}
+                  </p>
+                  <div className="my-5 h-px bg-neutral-500/15" />
+                  <ul className="mb-6 flex-1 space-y-3 text-sm text-neutral-600 dark:text-neutral-300">
+                    {plan.features.map(feature => (
+                      <li key={feature} className="flex items-start gap-2.5">
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    onClick={() => selectPlan(plan.id)}
+                    className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition-colors ${
+                      isDark
+                        ? 'bg-[#ccff00] text-black hover:bg-[#bbf000]'
+                        : 'bg-[#d97706] text-white hover:bg-[#b45309]'
+                    }`}
+                  >
+                    {currentUser ? 'Go to workspace' : 'Choose this plan'}
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                </motion.article>
+              ))}
+            </div>
+          ) : (
+            !plansError && <p className="text-center text-sm text-neutral-500">No subscription plans are currently available.</p>
+          )}
+
+          <p className="mt-6 text-center text-xs text-neutral-500">
+            One-time payment, no automatic renewal. Razorpay checkout is currently configured for Test Mode.
+          </p>
+        </div>
+      </section>
+
       {/* Bottom CTA */}
       <section className="pt-20">
         <div className="max-w-4xl mx-auto px-4 text-center">
@@ -901,35 +1013,25 @@ export const HeroView: React.FC = () => {
             }`}
           >
             <h2 className="text-2xl sm:text-3xl font-extrabold mb-3">
-              Ready to run a clearer fleet?
+              {currentUser ? 'Your fleet workspace is ready.' : 'Start your TransitOps subscription.'}
             </h2>
             <p className="text-sm text-neutral-500 dark:text-neutral-400 max-w-md mx-auto mb-8">
-              Explore the full interactive system with live data, automatic status transitions, and compliance guardrails.
+              {currentUser
+                ? 'Return to your organization workspace and continue managing fleet operations.'
+                : 'Select a plan, verify your organization email, and complete payment through Razorpay Checkout.'}
             </p>
             <div className="flex flex-wrap items-center justify-center gap-4">
               <motion.button
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
-                onClick={() => setActiveView('login')}
+                onClick={() => currentUser ? setActiveView('dashboard') : document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })}
                 className={`px-6 py-3 rounded-xl text-xs sm:text-sm font-bold shadow-md transition-all ${
                   isDark
                     ? 'bg-[#ccff00] text-black hover:bg-[#bbf000]'
                     : 'bg-[#d97706] text-white hover:bg-[#b45309]'
                 }`}
               >
-                Create Free Account
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => setActiveView('dashboard')}
-                className={`px-6 py-3 rounded-xl text-xs sm:text-sm font-semibold border transition-all ${
-                  isDark
-                    ? 'bg-[#1b202c] border-[#293242] hover:bg-[#232a3a] text-neutral-200'
-                    : 'bg-white border-[#ded7ca] hover:bg-neutral-100 text-neutral-800'
-                }`}
-              >
-                Open Live Dashboard
+                {currentUser ? 'Go to my workspace' : 'Compare subscription plans'}
               </motion.button>
             </div>
           </motion.div>

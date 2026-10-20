@@ -148,7 +148,8 @@ public sealed class AuthController : ControllerBase
             new Claim(ClaimTypes.Name, user.FullName),
             new Claim(ClaimTypes.Role, user.Role.ToString()),
             new Claim("tenant_id", user.TenantId),
-            new Claim("is_demo", user.IsDemoAccount.ToString())
+            new Claim("is_demo", user.IsDemoAccount.ToString()),
+            new Claim("security_stamp", user.SecurityStamp ?? string.Empty)
         };
 
         var token = new JwtSecurityToken(

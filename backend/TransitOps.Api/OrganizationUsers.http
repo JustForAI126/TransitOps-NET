@@ -1,0 +1,33 @@
+@baseUrl = http://localhost:5000
+@userId = <organization-user-id-from-list>
+
+### Sign in as an Organization Admin; the API uses its HttpOnly cookie.
+### Replace the email and password with an account for your Development tenant.
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "<organization-admin-email>",
+  "password": "<development-password>"
+}
+
+### List users in the authenticated organization and copy a non-admin ID to @userId.
+GET {{baseUrl}}/api/admin/users
+
+### Change a user's name, email, and built-in role.
+### Driver role requires contact and license details; organization_admin cannot be assigned here.
+PUT {{baseUrl}}/api/admin/users/{{userId}}
+Content-Type: application/json
+
+{
+  "fullName": "Alex Morgan",
+  "email": "alex.morgan@example.com",
+  "role": "FleetManager",
+  "contactNumber": null,
+  "licenseNumber": null,
+  "licenseCategory": null,
+  "licenseExpiryDate": null
+}
+
+### Delete the organization account; a linked driver profile and trip history are retained.
+DELETE {{baseUrl}}/api/admin/users/{{userId}}

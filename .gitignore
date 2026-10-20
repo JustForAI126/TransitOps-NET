@@ -25,3 +25,6 @@ TestResults/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# ngrok
+ngrok.yml

@@ -1,4 +1,5 @@
 using System.Text;
+using System.Security.Claims;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Hangfire.Dashboard;
@@ -12,6 +13,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.OpenApi.Models;
+using TransitOps.Api.Middleware;
 using TransitOps.Api.Hubs;
 using TransitOps.Application.Reports;
 using TransitOps.Application.Services;
@@ -47,6 +49,9 @@ if (string.IsNullOrWhiteSpace(npgsqlBuilder.Host))
 {
     throw new InvalidOperationException("The configured PostgreSQL connection string must include a host.");
 }
+// Supabase session poolers commonly cap all clients at 15; reserve connections for other tools and services.
+npgsqlBuilder.MaxPoolSize = Math.Min(npgsqlBuilder.MaxPoolSize, 8);
+npgsqlBuilder.MinPoolSize = Math.Min(npgsqlBuilder.MinPoolSize, npgsqlBuilder.MaxPoolSize);
 var connectionString = npgsqlBuilder.ConnectionString;
 builder.Services.AddDbContext<TransitOpsDbContext>(options =>
     options.UseNpgsql(connectionString, b => b.MigrationsAssembly("TransitOps.Infrastructure")));
@@ -101,6 +106,22 @@ builder.Services.AddAuthentication(options =>
     // Support JWT over SignalR WebSocket queries
     options.Events = new JwtBearerEvents
     {
+        OnTokenValidated = async context =>
+        {
+            var userId = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var tokenStamp = context.Principal?.FindFirst("security_stamp")?.Value;
+            if (string.IsNullOrWhiteSpace(userId) || tokenStamp is null)
+            {
+                context.Fail("The access token is no longer valid.");
+                return;
+            }
+
+            var userManager = context.HttpContext.RequestServices
+                .GetRequiredService<UserManager<ApplicationUser>>();
+            var user = await userManager.FindByIdAsync(userId);
+            if (user is null || !string.Equals(user.SecurityStamp, tokenStamp, StringComparison.Ordinal))
+                context.Fail("The access token is no longer valid.");
+        },
         OnMessageReceived = context =>
         {
             var path = context.HttpContext.Request.Path;
@@ -141,7 +162,7 @@ builder.Services.AddHangfire(configuration => configuration
     .UseSimpleAssemblyNameTypeSerializer()
     .UseRecommendedSerializerSettings()
     .UsePostgreSqlStorage(c => c.UseNpgsqlConnection(connectionString)));
-builder.Services.AddHangfireServer();
+builder.Services.AddHangfireServer(options => options.WorkerCount = 2);
 
 builder.Services.AddScoped<IHangfireJobs, HangfireJobs>();
 
@@ -150,6 +171,16 @@ builder.Services.AddValidatorsFromAssemblyContaining<CreateVehicleValidator>();
 builder.Services.AddScoped<IKpiService, KpiService>();
 builder.Services.AddScoped<ICsvExportService, CsvExportService>();
 builder.Services.AddScoped<IPdfReportService, QuestPdfReportService>();
+builder.Services.Configure<SaasOnboardingOptions>(builder.Configuration.GetSection("SaasOnboarding"));
+builder.Services.Configure<RazorpayOptions>(builder.Configuration.GetSection("Razorpay"));
+builder.Services.Configure<SmtpEmailOptions>(builder.Configuration.GetSection("Email:Smtp"));
+builder.Services.Configure<PublicApplicationOptions>(builder.Configuration.GetSection("PublicApplication"));
+builder.Services.AddHttpClient("Razorpay", client =>
+{
+    client.BaseAddress = new Uri("https://api.razorpay.com/v1/");
+    client.Timeout = TimeSpan.FromSeconds(20);
+});
+builder.Services.AddScoped<ISaasOnboardingService, SaasOnboardingService>();
 
 // 7. CORS
 builder.Services.AddCors(options =>
@@ -169,6 +200,7 @@ builder.Services.AddControllers()
     .AddJsonOptions(options =>
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<OnboardingExceptionHandler>();
 
 builder.Services.AddRateLimiter(options =>
 {
@@ -179,6 +211,16 @@ builder.Services.AddRateLimiter(options =>
             {
                 PermitLimit = 10,
                 Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
+    options.AddPolicy("onboarding", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 15,
+                Window = TimeSpan.FromMinutes(5),
                 QueueLimit = 0,
                 AutoReplenishment = true
             }));
@@ -260,14 +302,8 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var db = scope.ServiceProvider.GetRequiredService<TransitOpsDbContext>();
-        if (db.Database.GetMigrations().Any())
-        {
-            db.Database.Migrate();
-        }
-        else
-        {
-            db.Database.EnsureCreated();
-        }
+        db.Database.EnsureCreated();
+        db.Database.Migrate();
 
         db.Database.ExecuteSqlRaw("""
             ALTER TABLE "Drivers" ADD COLUMN IF NOT EXISTS "IdentityUserId" character varying(450);

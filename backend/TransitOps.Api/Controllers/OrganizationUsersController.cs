@@ -18,15 +18,18 @@ public sealed class OrganizationUsersController : ControllerBase
     private readonly TransitOpsDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IValidator<CreateOrganizationUserRequest> _validator;
+    private readonly IValidator<UpdateOrganizationUserRequest> _updateValidator;
 
     public OrganizationUsersController(
         TransitOpsDbContext db,
         UserManager<ApplicationUser> userManager,
-        IValidator<CreateOrganizationUserRequest> validator)
+        IValidator<CreateOrganizationUserRequest> validator,
+        IValidator<UpdateOrganizationUserRequest> updateValidator)
     {
         _db = db;
         _userManager = userManager;
         _validator = validator;
+        _updateValidator = updateValidator;
     }
 
     [HttpGet]
@@ -40,15 +43,15 @@ public sealed class OrganizationUsersController : ControllerBase
             .OrderBy(user => user.Email)
             .ToListAsync(cancellationToken);
         var userIds = users.Select(user => user.Id).ToArray();
-        var driverIds = await _db.Drivers
+        var drivers = await _db.Drivers
             .AsNoTracking()
             .Where(driver => driver.TenantId == tenantId && driver.IdentityUserId != null &&
                              userIds.Contains(driver.IdentityUserId))
-            .ToDictionaryAsync(driver => driver.IdentityUserId!, driver => (Guid?)driver.Id, cancellationToken);
+            .ToDictionaryAsync(driver => driver.IdentityUserId!, cancellationToken);
 
         return Ok(users.Select(user => ToResponse(
             user,
-            driverIds.GetValueOrDefault(user.Id))).ToArray());
+            drivers.GetValueOrDefault(user.Id))).ToArray());
     }
 
     [HttpGet("{id}")]
@@ -64,11 +67,11 @@ public sealed class OrganizationUsersController : ControllerBase
         if (user is null)
             return NotFound();
 
-        var driverId = await _db.Drivers
+        var driver = await _db.Drivers
+            .AsNoTracking()
             .Where(driver => driver.TenantId == user.TenantId && driver.IdentityUserId == user.Id)
-            .Select(driver => (Guid?)driver.Id)
             .FirstOrDefaultAsync(cancellationToken);
-        return Ok(ToResponse(user, driverId));
+        return Ok(ToResponse(user, driver));
     }
 
     [HttpPost]
@@ -127,10 +130,10 @@ public sealed class OrganizationUsersController : ControllerBase
             return BadRequest(new ValidationProblemDetails(errors));
         }
 
-        Guid? driverId = null;
+        Driver? createdDriver = null;
         if (request.Role == UserRole.Driver)
         {
-            var driver = new Driver
+            createdDriver = new Driver
             {
                 TenantId = tenantId,
                 IdentityUserId = user.Id,
@@ -143,11 +146,10 @@ public sealed class OrganizationUsersController : ControllerBase
                 SafetyScore = 100,
                 Status = DriverStatus.Available
             };
-            _db.Drivers.Add(driver);
+            _db.Drivers.Add(createdDriver);
             try
             {
                 await _db.SaveChangesAsync(cancellationToken);
-                driverId = driver.Id;
             }
             catch (DbUpdateException)
             {
@@ -162,14 +164,209 @@ public sealed class OrganizationUsersController : ControllerBase
         }
 
         await transaction.CommitAsync(cancellationToken);
-        var response = ToResponse(user, driverId);
+        var response = ToResponse(user, createdDriver);
         return CreatedAtAction(nameof(GetById), new { id = user.Id }, response);
+    }
+
+    [HttpPut("{id}")]
+    [ProducesResponseType(typeof(OrganizationUserResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Update(
+        string id,
+        [FromBody] UpdateOrganizationUserRequest request,
+        CancellationToken cancellationToken)
+    {
+        var validation = await _updateValidator.ValidateAsync(request, cancellationToken);
+        if (!validation.IsValid)
+            return BadRequest(new ValidationProblemDetails(validation.ToDictionary()));
+
+        var user = await _db.Users.FirstOrDefaultAsync(
+            candidate => candidate.Id == id && candidate.TenantId == GetTenantId(),
+            cancellationToken);
+        if (user is null)
+            return NotFound();
+
+        if (user.Role == UserRole.OrganizationAdmin)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "Administrator account is protected",
+                Detail = "Organization administrator accounts cannot be changed from this screen."
+            });
+        }
+
+        if (request.Role == UserRole.OrganizationAdmin)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Role cannot be assigned",
+                Detail = "Organization administrator access can only be provisioned through the trusted organization setup process."
+            });
+        }
+
+        var email = request.Email.Trim();
+        var existingUser = await _userManager.FindByEmailAsync(email);
+        if (existingUser is not null && existingUser.Id != user.Id)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "Email already in use",
+                Detail = "An account with this email address already exists."
+            });
+        }
+
+        await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+        var driver = await _db.Drivers.FirstOrDefaultAsync(
+            candidate => candidate.TenantId == user.TenantId && candidate.IdentityUserId == user.Id,
+            cancellationToken);
+        user.FullName = request.FullName.Trim();
+        user.Email = email;
+        user.UserName = email;
+        user.Role = request.Role;
+
+        if (request.Role == UserRole.Driver)
+        {
+            driver ??= new Driver
+            {
+                TenantId = user.TenantId,
+                IdentityUserId = user.Id,
+                SafetyScore = 100,
+                Status = DriverStatus.Available
+            };
+            driver.IdentityUserId = user.Id;
+            driver.Name = user.FullName;
+            driver.Email = email;
+            driver.ContactNumber = request.ContactNumber!.Trim();
+            driver.LicenseNumber = request.LicenseNumber!.Trim().ToUpperInvariant();
+            driver.LicenseCategory = request.LicenseCategory!.Trim();
+            driver.LicenseExpiryDate = request.LicenseExpiryDate!.Value;
+            if (_db.Entry(driver).State == EntityState.Detached)
+                _db.Drivers.Add(driver);
+        }
+        else if (driver is not null)
+        {
+            driver.Name = user.FullName;
+            driver.Email = email;
+        }
+
+        try
+        {
+            var updateResult = await _userManager.UpdateAsync(user);
+            if (!updateResult.Succeeded)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return IdentityFailure(updateResult);
+            }
+
+            var stampResult = await _userManager.UpdateSecurityStampAsync(user);
+            if (!stampResult.Succeeded)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return IdentityFailure(stampResult);
+            }
+
+            await _db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return Conflict(new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "Organization account could not be updated",
+                Detail = "The email address or driver license details may already be in use."
+            });
+        }
+
+        return Ok(ToResponse(user, driver));
+    }
+
+    [HttpDelete("{id}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Delete(string id, CancellationToken cancellationToken)
+    {
+        var user = await _db.Users.FirstOrDefaultAsync(
+            candidate => candidate.Id == id && candidate.TenantId == GetTenantId(),
+            cancellationToken);
+        if (user is null)
+            return NotFound();
+
+        if (user.Role == UserRole.OrganizationAdmin)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "Administrator account is protected",
+                Detail = "Organization administrator accounts cannot be deleted from this screen."
+            });
+        }
+
+        await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            var driver = await _db.Drivers.FirstOrDefaultAsync(
+                candidate => candidate.TenantId == user.TenantId && candidate.IdentityUserId == user.Id,
+                cancellationToken);
+            if (driver is not null)
+            {
+                driver.IdentityUserId = null;
+                await _db.SaveChangesAsync(cancellationToken);
+            }
+
+            var deleteResult = await _userManager.DeleteAsync(user);
+            if (!deleteResult.Succeeded)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return IdentityFailure(deleteResult);
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return Conflict(new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "Organization account could not be deleted",
+                Detail = "The account is still referenced by data that must be retained."
+            });
+        }
+
+        return NoContent();
     }
 
     private string GetTenantId() => User.FindFirst("tenant_id")?.Value
         ?? throw new UnauthorizedAccessException("The authenticated user has no tenant.");
 
-    private static OrganizationUserResponse ToResponse(ApplicationUser user, Guid? driverId) => new(
+    private static IActionResult IdentityFailure(IdentityResult result)
+    {
+        var errors = result.Errors.ToDictionary(
+            error => error.Code,
+            error => new[] { error.Description });
+        var status = result.Errors.Any(error =>
+            error.Code is "DuplicateEmail" or "DuplicateUserName")
+            ? StatusCodes.Status409Conflict
+            : StatusCodes.Status400BadRequest;
+        var details = new ValidationProblemDetails(errors)
+        {
+            Status = status,
+            Title = status == StatusCodes.Status409Conflict
+                ? "Organization account already exists"
+                : "Organization account could not be updated"
+        };
+        return new ObjectResult(details) { StatusCode = status };
+    }
+
+    private static OrganizationUserResponse ToResponse(ApplicationUser user, Driver? driver) => new(
         user.Id,
         user.FullName,
         user.Email ?? string.Empty,
@@ -182,5 +379,9 @@ public sealed class OrganizationUsersController : ControllerBase
             UserRole.FinancialAnalyst => "financial_analyst",
             _ => throw new InvalidOperationException("The account has an unsupported role.")
         },
-        driverId);
+        driver?.Id,
+        driver?.ContactNumber,
+        driver?.LicenseNumber,
+        driver?.LicenseCategory,
+        driver?.LicenseExpiryDate);
 }

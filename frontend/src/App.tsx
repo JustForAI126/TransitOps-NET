@@ -16,6 +16,7 @@ import { AddDriverModal } from './components/modals/AddDriverModal';
 // Views
 import { LoginView } from './components/views/AuthViews';
 import { HeroView } from './components/views/HeroView';
+import { SaasOnboardingView } from './components/views/SaasOnboardingView';
 import { DashboardView } from './components/views/DashboardView';
 import { VehiclesView } from './components/views/VehiclesView';
 import { TripsView } from './components/views/TripsView';
@@ -38,11 +39,14 @@ const MainLayout: React.FC = () => {
     safety_officer: ['dashboard', 'vehicles', 'drivers', 'maintenance'],
     financial_analyst: ['dashboard', 'vehicles', 'trips', 'maintenance', 'expenses', 'reports', 'analytics'],
   };
-  const view = currentUser
+  const isPublicFlow = activeView === 'purchase' || activeView === 'setup_account';
+  const view = isPublicFlow
+    ? activeView
+    : currentUser
     ? allowedViews[currentUser.role].includes(activeView)
       ? activeView
       : currentUser.role === 'organization_admin' ? 'organization_admin' : 'dashboard'
-    : activeView === 'hero' ? 'hero' : 'login';
+    : ['hero', 'login', 'purchase', 'setup_account'].includes(activeView) ? activeView : 'login';
 
   useEffect(() => {
     if (view !== activeView) setActiveView(view as typeof activeView);
@@ -62,7 +66,7 @@ const MainLayout: React.FC = () => {
   };
 
   const isLogin = view === 'login';
-  const isPublicView = view === 'hero' || isLogin;
+  const isPublicView = ['hero', 'login', 'purchase', 'setup_account'].includes(view);
 
   return (
     <>
@@ -90,7 +94,11 @@ const MainLayout: React.FC = () => {
         {/* Dynamic Body Layout */}
         {isPublicView ? (
           <main className="flex-1 overflow-y-auto">
-            {view === 'hero' ? <HeroView /> : <LoginView />}
+            {view === 'hero' && <HeroView />}
+            {view === 'login' && <LoginView />}
+            {(view === 'purchase' || view === 'setup_account') && (
+              <SaasOnboardingView initialMode={view === 'setup_account' ? 'setup' : 'purchase'} />
+            )}
           </main>
         ) : (
           <div className="flex-1 flex overflow-hidden min-h-0">

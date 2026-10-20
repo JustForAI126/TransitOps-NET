@@ -13,6 +13,68 @@ public class ApplicationUser : IdentityUser
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
+public class Organization
+{
+    public string TenantId { get; set; } = Guid.NewGuid().ToString("N");
+    public string Name { get; set; } = string.Empty;
+    public string BillingEmail { get; set; } = string.Empty;
+    public string NormalizedBillingEmail { get; set; } = string.Empty;
+    public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public class OrganizationSubscription
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string TenantId { get; set; } = string.Empty;
+    public string PlanId { get; set; } = string.Empty;
+    public string PlanName { get; set; } = string.Empty;
+    public long AmountPaise { get; set; }
+    public string Currency { get; set; } = "INR";
+    public int TermMonths { get; set; }
+    public DateTimeOffset StartsAtUtc { get; set; }
+    public DateTimeOffset EndsAtUtc { get; set; }
+    public string Status { get; set; } = "Active";
+    public string RazorpayOrderId { get; set; } = string.Empty;
+    public string RazorpayPaymentId { get; set; } = string.Empty;
+    public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public class SaasPurchase
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string OrganizationName { get; set; } = string.Empty;
+    public string FullName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string NormalizedEmail { get; set; } = string.Empty;
+    public string CapabilityTokenHash { get; set; } = string.Empty;
+    public string? EmailVerificationCodeHash { get; set; }
+    public DateTimeOffset? EmailVerificationExpiresAtUtc { get; set; }
+    public DateTimeOffset? EmailVerifiedAtUtc { get; set; }
+    public int EmailVerificationAttempts { get; set; }
+    public int EmailVerificationResends { get; set; }
+    public string? PlanId { get; set; }
+    public string? PlanName { get; set; }
+    public long? AmountPaise { get; set; }
+    public int? TermMonths { get; set; }
+    public string? RazorpayOrderId { get; set; }
+    public string? RazorpayPaymentId { get; set; }
+    public string PaymentStatus { get; set; } = "AwaitingEmailVerification";
+    public string? TenantId { get; set; }
+    public string? SetupTokenHash { get; set; }
+    public DateTimeOffset? SetupTokenExpiresAtUtc { get; set; }
+    public DateTimeOffset? SetupCompletedAtUtc { get; set; }
+    public DateTimeOffset? ReceiptEmailSentAtUtc { get; set; }
+    public DateTimeOffset? SetupEmailSentAtUtc { get; set; }
+    public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public class RazorpayWebhookReceipt
+{
+    public long Id { get; set; }
+    public string EventId { get; set; } = string.Empty;
+    public DateTimeOffset ReceivedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+}
+
 public class Vehicle
 {
     public Guid Id { get; set; } = Guid.NewGuid();

@@ -115,6 +115,7 @@ Generated directories such as `node_modules/`, `dist/`, `.NET bin/obj/`, and `.g
 | `frontend/src/components/SplashScreen.tsx` | Intro/loading presentation shown during the initial splash state. |
 | `frontend/src/components/views/HeroView.tsx` | Public product landing page and entry point to sign in. |
 | `frontend/src/components/views/AuthViews.tsx` | Login interface and legacy registration component. Public registration is not part of the intended account-provisioning flow. |
+| `frontend/src/components/views/SaasOnboardingView.tsx` | Public email-verification, plan selection, Razorpay Checkout, retryable confirmation, and password-setup UI. It sends payment results to the API for verification; it never provisions an organization itself. |
 | `frontend/src/components/views/DashboardView.tsx` | Chooses the role-specific dashboard and displays loading/error/retry state or first-use onboarding. |
 | `frontend/src/components/views/OrganizationAdminDashboard.tsx` | Lists organization users and creates tenant-scoped Fleet Manager, Driver, Safety Officer, and Financial Analyst accounts. Driver account creation also includes driver profile information. |
 | `frontend/src/components/views/VehiclesView.tsx` | Vehicle search/list/detail, lifecycle/status actions, and vehicle-related display/export behavior. |
@@ -153,6 +154,9 @@ Generated directories such as `node_modules/`, `dist/`, `.NET bin/obj/`, and `.g
 | `backend/TransitOps.Application/Reports/QuestPdfReportService.cs` | PDF report types and QuestPDF generation for the financial ledger, trip receipt, and fleet ROI summary. |
 | `backend/TransitOps.Infrastructure/TransitOps.Infrastructure.csproj` | Infrastructure project definition and EF Core/Npgsql/Hangfire dependencies. |
 | `backend/TransitOps.Infrastructure/Persistence/TransitOpsDbContext.cs` | EF Core Identity context, entity sets, enum conversions, indexes, constraints, precision, and relationships. |
+| `backend/TransitOps.Infrastructure/Persistence/Migrations/` | Additive migrations for SaaS organizations, subscriptions, purchase state, webhook idempotency, and email verification retry state. |
+| `backend/TransitOps.Infrastructure/Services/SaasOnboardingService.cs` | Server-authoritative email verification, Razorpay order/payment/webhook verification, idempotent tenant/subscription creation, SMTP delivery, and one-time admin setup. |
+| `backend/TransitOps.Infrastructure/Services/SaasOnboardingOptions.cs` | Configurable plan catalog and server-side Razorpay, SMTP, and public app options. |
 | `backend/TransitOps.Infrastructure/Services/KpiService.cs` | PostgreSQL/EF Core-backed role KPI calculations behind `IKpiService`. |
 | `backend/TransitOps.Infrastructure/BackgroundJobs/HangfireJobs.cs` | Scheduled tasks for licence expiry review, maintenance schedule audit, and stale trip reconciliation. |
 | `backend/TransitOps.Api/TransitOps.Api.csproj` | Web API project definition, target framework, project references, and API-specific packages. Contains the `UserSecretsId`; the actual secret values belong outside the repository. |
@@ -161,6 +165,7 @@ Generated directories such as `node_modules/`, `dist/`, `.NET bin/obj/`, and `.g
 | `backend/TransitOps.Api/Properties/launchSettings.json` | Local launch profile/environment and localhost API URL/port used by `dotnet run`. |
 | `backend/TransitOps.Api/Hubs/TransitOpsHub.cs` | Authenticated SignalR hub and client event contract. |
 | `backend/TransitOps.Api/Controllers/AuthController.cs` | Login, current session (`me`), and logout. Login is anonymous; protected operations require a valid authenticated identity. |
+| `backend/TransitOps.Api/Controllers/OnboardingController.cs` | Anonymous, rate-limited email verification, plan listing, order creation, signed Razorpay confirmation/webhook, and setup endpoints. |
 | `backend/TransitOps.Api/Controllers/OrganizationUsersController.cs` | Organization Admin-only tenant user listing and account creation, including driver profile linkage. |
 | `backend/TransitOps.Api/Controllers/VehiclesController.cs` | Tenant-scoped vehicle listing/details, create/update/status/retire endpoints, validations, and lifecycle checks. |
 | `backend/TransitOps.Api/Controllers/DriversController.cs` | Tenant-scoped driver CRUD/updates, suspension toggle, and licence reminders, limited by role. |
@@ -214,11 +219,11 @@ The API must be running and reachable for authentication, persisted data, report
 5. Register SignalR, Hangfire PostgreSQL storage/server, FluentValidation, KPI/export services, CORS, MVC controllers, error details, rate limiting, and Swagger.
 6. Build the app and install exception, routing, CORS, rate-limit, authentication, authorization, and endpoint middleware.
 7. Map API controllers and the SignalR hub.
-8. Initialize schema using EF migrations when available; otherwise use `EnsureCreated()`. Startup also applies PostgreSQL indexes/column compatibility SQL.
+8. Call `EnsureCreated()` for a fresh schema and then apply additive EF migrations. Startup also applies PostgreSQL indexes/column compatibility SQL.
 9. Only in Development, seed demo fleet data/accounts. Seeding should be idempotent so repeated app starts do not create duplicate fixtures.
 10. Register recurring Hangfire jobs with the service-based `IRecurringJobManager`, then run the web host.
 
-**Schema caution:** `EnsureCreated()` creates an initial schema but does not migrate an existing schema. Add and use EF migrations for durable production schema evolution.
+**Schema caution:** `EnsureCreated()` does not upgrade an existing schema. New SaaS tables are covered by idempotent migrations, with an extra `ADD COLUMN IF NOT EXISTS` for verification resends; review and back up databases before applying migrations.
 
 ### 4.3 Browser session and route selection
 
@@ -241,7 +246,7 @@ After authentication, the SignalR client connects to `/hubs/transitops`. Relevan
 |---|---|
 | Organization Admin | Create and list organization users; assign operational roles. |
 | Fleet Manager | Operate vehicle/driver/trip/maintenance workflows, review fleet KPIs and reports, export fleet ROI. |
-| Driver | Work with trip/dispatch operations and trip completion. The current implementation permits trip operations at tenant scope; it does not fully enforce linked-driver-only access. |
+| Driver | View assigned trips, complete dispatched trips assigned to the linked driver profile, and download own trip receipts. Creating, dispatching, and cancelling trips are Fleet Manager-only actions. |
 | Safety Officer | Review and manage driver compliance/safety and maintenance safety information. |
 | Financial Analyst | Review financial and trip information, expenses/maintenance costs as permitted, and download the financial ledger. |
 
@@ -255,7 +260,7 @@ After authentication, the SignalR client connects to `/hubs/transitops`. Relevan
 - Financial fields are restricted/redacted for roles that are not authorized to see them.
 - Retiring a vehicle is preferred to deleting it where history must remain available.
 - The demo records belong to `demo_tenant`. Users created by the demo admin join that tenant and share its records. A real organization must be created with a distinct tenant ID to receive an empty workspace.
-- Demo identities are Development-only. First production Organization Admin provisioning after a purchase is not yet integrated with billing; it must be provided by a trusted provisioning flow, never public registration.
+- Demo identities are Development-only. Paid onboarding now uses verified email, server-created Razorpay Test Mode orders, server-verified captured payments, tenant-scoped organization/subscription records, and a single-use admin setup link. Recurring billing, live-mode payment processing, automated renewals, and billing management are not implemented.
 
 See [`ACCESS_AND_KPI.md`](./ACCESS_AND_KPI.md) for the detailed resource/action permission matrix and known authorization design decisions.
 
@@ -335,7 +340,7 @@ Minimum operational checklist:
 
 1. Install Node.js/npm and the .NET SDK version matching the solution.
 2. Install frontend dependencies with `npm --prefix frontend install`.
-3. Configure `ConnectionStrings:DefaultConnection`, `Jwt:Key`, and `DemoAccounts:Password` with .NET User Secrets for Development. Never commit secret values.
+3. Configure `ConnectionStrings:DefaultConnection`, `Jwt:Key`, `DemoAccounts:Password`, Razorpay Test Mode credentials, and SMTP credentials with .NET User Secrets for Development. Never commit secret values.
 4. Run PostgreSQL (or configure a reachable PostgreSQL/Supabase connection).
 5. Start ASP.NET Core, then start the frontend host in a second terminal.
 6. Browse to `http://localhost:3000`; use the configured Development demo password if signing in with seeded demo accounts.
@@ -369,12 +374,13 @@ dotnet run --project backend\TransitOps.Api\TransitOps.Api.csproj
 
 ### Known limitations / decisions not to silently assume
 
-- **Driver vs Dispatcher:** only `Driver` exists; driver trip access currently operates tenant-wide rather than enforcing ownership to the user’s linked driver profile.
-- **Production admin provisioning:** purchase/billing integration for creating the first tenant and Organization Admin is not implemented.
+- **Driver vs Dispatcher:** only `Driver` exists; drivers can view and complete trips assigned to their linked profile, but cannot create, dispatch, or cancel trips.
+- **Subscription billing:** the current checkout is a one-time Razorpay charge for a fixed configured term. It does not auto-renew and does not implement Razorpay Subscriptions.
+- **Onboarding configuration:** email verification requires SMTP; payment order creation/verification requires Test Mode Razorpay credentials. Missing configuration fails closed rather than simulating success.
 - **KPI scope:** frontend filtered Fleet Manager cards and backend tenant-wide KPI endpoints do not necessarily share exactly the same scope.
 - **Uniqueness scope:** current normalized uniqueness indexes are global for the protected values, not tenant-local; changing this requires a product/data migration decision.
 - **Dashboard averages:** ROI PDF averages are explicit report averages. Do not present them as a time-windowed KPI; no reporting-period selector is currently defined.
-- **Schema changes:** there are no EF migration files in the current source inventory. Startup’s `EnsureCreated()` is insufficient to evolve a previously created production database.
+- **Schema changes:** SaaS onboarding adds idempotent EF migrations. `EnsureCreated()` still initializes only fresh databases and must not be treated as a general schema-upgrade mechanism.
 - **Documentation drift:** the older architecture guide includes illustrative architectural language and examples. Verify all claims against actual source before using them as a specification.
 - **Local JSON snapshot:** PostgreSQL is the runtime backend source of truth. `frontend/data/transitops_store.json` is a retained snapshot and is not the runtime data store.
 
@@ -417,11 +423,11 @@ dotnet run --project backend\TransitOps.Api\TransitOps.Api.csproj
 11. **How does tenant isolation work?**  
     The authenticated user has a tenant claim; API queries and writes scope tenant-owned records to that claim.
 
-12. **Why is the demo admin not the production provisioning mechanism?**  
-    Demo accounts are Development-only. Production first-admin creation must be part of a trusted purchase/organization provisioning flow, not public registration.
+12. **How is the first production Organization Admin provisioned?**  
+    A verified organization email and captured Razorpay payment are required before a time-limited single-use setup link is sent. The customer chooses a password; the backend assigns only the tenant-scoped `OrganizationAdmin` role.
 
 13. **Can Driver and Dispatcher be used as synonyms here?**  
-    No. The code defines Driver only. Its existing broad trip permissions are a product/security decision that should be refined before asserting driver-only assignment semantics.
+    No. The code defines Driver only. Drivers can view and complete only trips assigned to their linked driver profile; they cannot create, dispatch, or cancel trips.
 
 ### Workflow and persistence
 

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +26,10 @@ public class ReportsController : ControllerBase
 
     private string GetTenantId() => User.FindFirst("tenant_id")?.Value
         ?? throw new UnauthorizedAccessException("The authenticated user has no tenant.");
+
+    private string? GetUserId() =>
+        User.FindFirst(ClaimTypes.NameIdentifier)?.Value ??
+        User.FindFirst("sub")?.Value;
 
     [HttpGet("export/csv/trips")]
     [Authorize(Roles = "FleetManager,FinancialAnalyst")]
@@ -195,6 +200,12 @@ public class ReportsController : ControllerBase
             .FirstOrDefaultAsync(t => t.Id == tripId && t.TenantId == tenantId, cancellationToken);
 
         if (trip == null) return NotFound();
+
+        if (User.IsInRole(UserRole.Driver.ToString()) &&
+            !string.Equals(trip.Driver.IdentityUserId, GetUserId(), StringComparison.Ordinal))
+        {
+            return Forbid();
+        }
 
         var pdfBytes = _pdfService.GenerateTripTurnInReceiptPdf(trip);
         return File(pdfBytes, "application/pdf", $"Receipt_{trip.TripCode}.pdf");

@@ -1,0 +1,106 @@
+@baseUrl = http://localhost:5000
+@purchaseId = {{begin.response.body.$.purchaseId}}
+@purchaseSecret = {{begin.response.body.$.purchaseSecret}}
+@razorpayOrderId = {{createOrder.response.body.$.orderId}}
+@razorpayPaymentId = replace-with-payment-id-from-test-checkout
+@razorpaySignature = replace-with-checkout-signature-from-test-checkout
+@setupToken = replace-with-token-from-setup-email
+
+### Get the server-owned plan catalog
+GET {{baseUrl}}/api/onboarding/plans
+
+### Begin onboarding and send an email verification code
+# @name begin
+POST {{baseUrl}}/api/onboarding/begin
+Content-Type: application/json
+
+{
+  "organizationName": "Example Transit Services",
+  "fullName": "Asha Sharma",
+  "email": "asha@example.com"
+}
+
+### Verify the organization email using the received six-digit code
+POST {{baseUrl}}/api/onboarding/verify-email
+Content-Type: application/json
+
+{
+  "purchaseId": "{{purchaseId}}",
+  "purchaseSecret": "{{purchaseSecret}}",
+  "code": "123456"
+}
+
+### Resend the verification code (limited retries)
+POST {{baseUrl}}/api/onboarding/resend-verification
+Content-Type: application/json
+
+{
+  "purchaseId": "{{purchaseId}}",
+  "purchaseSecret": "{{purchaseSecret}}"
+}
+
+### Create an order using a server-configured plan ID
+# @name createOrder
+POST {{baseUrl}}/api/onboarding/orders
+Content-Type: application/json
+
+{
+  "purchaseId": "{{purchaseId}}",
+  "purchaseSecret": "{{purchaseSecret}}",
+  "planId": "essential"
+}
+
+### Verify payment after Razorpay Checkout; backend independently checks Razorpay
+POST {{baseUrl}}/api/onboarding/verify-payment
+Content-Type: application/json
+
+{
+  "razorpayOrderId": "{{razorpayOrderId}}",
+  "razorpayPaymentId": "{{razorpayPaymentId}}",
+  "razorpaySignature": "{{razorpaySignature}}"
+}
+
+### Check saved onboarding progress
+POST {{baseUrl}}/api/onboarding/progress
+Content-Type: application/json
+
+{
+  "purchaseId": "{{purchaseId}}",
+  "purchaseSecret": "{{purchaseSecret}}"
+}
+
+### Retry purchase receipt and account-setup email delivery
+POST {{baseUrl}}/api/onboarding/retry-emails
+Content-Type: application/json
+
+{
+  "purchaseId": "{{purchaseId}}",
+  "purchaseSecret": "{{purchaseSecret}}"
+}
+
+### Create the first tenant-scoped Organization Admin from the emailed single-use token
+POST {{baseUrl}}/api/onboarding/complete-account-setup
+Content-Type: application/json
+
+{
+  "token": "{{setupToken}}",
+  "password": "Replace-With-A-Strong-Password1!"
+}
+
+### Razorpay webhook example; replace placeholder signature/event ID with real signed headers
+POST {{baseUrl}}/api/onboarding/webhook/razorpay
+Content-Type: application/json
+X-Razorpay-Signature: replace-with-webhook-hmac
+X-Razorpay-Event-Id: evt_test_example
+
+{
+  "event": "payment.captured",
+  "payload": {
+    "payment": {
+      "entity": {
+        "id": "pay_test_example",
+        "order_id": "{{razorpayOrderId}}"
+      }
+    }
+  }
+}

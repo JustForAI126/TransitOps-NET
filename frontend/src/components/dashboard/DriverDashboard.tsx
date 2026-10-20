@@ -2,37 +2,28 @@ import React from 'react';
 import {
   Navigation,
   Clock,
-  Truck,
-  Users,
   CheckCircle2,
-  Send,
   Download,
   ArrowUpRight,
-  Package,
   FileText,
+  RefreshCw,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useTheme } from '../../context/ThemeContext';
 import { Trip } from '../../types';
-import { LiveRouteRadar } from './LiveRouteRadar';
 
 interface DriverDashboardProps {
-  onOpenNewTripModal: () => void;
   onOpenCompleteTripModal: (trip: Trip) => void;
 }
 
 export const DriverDashboard: React.FC<DriverDashboardProps> = ({
-  onOpenNewTripModal,
   onOpenCompleteTripModal,
 }) => {
   const {
     trips,
-    vehicles,
-    drivers,
-    dispatchTrip,
-    cancelTrip,
     exportToCSV,
     setActiveView,
+    refreshData,
   } = useApp();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -40,10 +31,6 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
   const activeDeliveries = trips.filter((t) => t.status === 'Dispatched');
   const pendingDispatches = trips.filter((t) => t.status === 'Draft');
   const completedTrips = trips.filter((t) => t.status === 'Completed');
-  const availableVehicles = vehicles.filter((v) => v.status === 'Available');
-  const onDutyDrivers = drivers.filter(
-    (d) => d.status !== 'Suspended' && d.licenseExpiryDate >= new Date().toISOString().split('T')[0]
-  );
 
   const handleExportManifest = () => {
     const manifest = trips.map((t) => ({
@@ -67,15 +54,17 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
             <span>TRANSITOPS</span>
             <span>/</span>
             <span className="font-semibold text-emerald-500">
-              DRIVER &amp; DISPATCH DESK
+              DRIVER WORKSPACE
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            Active Deliveries &amp; Dispatch Console
+            My Assigned Trips
           </h1>
+          <p className="mt-1 text-xs text-neutral-400">
+            Review your assignments and record delivery details when a trip is dispatched.
+          </p>
         </div>
 
-        {/* Action Controls */}
         <div className="flex flex-wrap items-center gap-2.5">
           <button
             onClick={handleExportManifest}
@@ -88,34 +77,21 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
             <Download className="w-3.5 h-3.5" />
             <span>Export Manifest</span>
           </button>
-
-          <button
-            onClick={onOpenNewTripModal}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 ${
-              isDark
-                ? 'bg-emerald-400 text-black hover:bg-emerald-300 shadow-[0_0_15px_rgba(52,211,153,0.2)]'
-                : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-600/20'
-            }`}
-          >
-            <Send className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span>New Dispatch</span>
-          </button>
         </div>
       </div>
 
-      {/* Driver/Dispatcher KPIs Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <div
           className={`p-4 rounded-xl border flex flex-col justify-between ${
             isDark ? 'bg-[#14171e] border-[#252b36]' : 'bg-white border-[#e5dfd2] shadow-xs'
           }`}
         >
           <div className="flex items-center justify-between text-neutral-400 mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Active Deliveries</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider">In Transit</span>
             <Navigation className="w-4 h-4 text-amber-400" />
           </div>
           <div className="text-2xl font-black font-mono text-amber-400">{activeDeliveries.length}</div>
-          <div className="text-[11px] text-neutral-500 mt-1">On road right now</div>
+          <div className="text-[11px] text-neutral-500 mt-1">Your dispatched trips</div>
         </div>
 
         <div
@@ -124,37 +100,11 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
           }`}
         >
           <div className="flex items-center justify-between text-neutral-400 mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Pending Departure</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider">Upcoming Assignments</span>
             <Clock className="w-4 h-4 text-purple-400" />
           </div>
           <div className="text-2xl font-black font-mono">{pendingDispatches.length}</div>
-          <div className="text-[11px] text-neutral-500 mt-1">Awaiting dispatch</div>
-        </div>
-
-        <div
-          className={`p-4 rounded-xl border flex flex-col justify-between ${
-            isDark ? 'bg-[#14171e] border-[#252b36]' : 'bg-white border-[#e5dfd2] shadow-xs'
-          }`}
-        >
-          <div className="flex items-center justify-between text-neutral-400 mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Available Assets</span>
-            <Truck className="w-4 h-4 text-emerald-400" />
-          </div>
-          <div className="text-2xl font-black font-mono">{availableVehicles.length}</div>
-          <div className="text-[11px] text-neutral-500 mt-1">Ready for assignment</div>
-        </div>
-
-        <div
-          className={`p-4 rounded-xl border flex flex-col justify-between ${
-            isDark ? 'bg-[#14171e] border-[#252b36]' : 'bg-white border-[#e5dfd2] shadow-xs'
-          }`}
-        >
-          <div className="flex items-center justify-between text-neutral-400 mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Drivers On Duty</span>
-            <Users className="w-4 h-4 text-blue-400" />
-          </div>
-          <div className="text-2xl font-black font-mono">{onDutyDrivers.length}</div>
-          <div className="text-[11px] text-neutral-500 mt-1">Available for routes</div>
+          <div className="text-[11px] text-neutral-500 mt-1">Awaiting Fleet Manager dispatch</div>
         </div>
 
         <div
@@ -171,98 +121,30 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
         </div>
       </div>
 
-      {/* Main Grid: Live Route Radar + Dispatch Queue Attention */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-8">
-          <LiveRouteRadar
-            title="Active Dispatches"
-            subtitle="Assigned routes from saved trip data. GPS location is not available."
-            trips={trips}
-          />
-        </div>
-
-        {/* Dispatch Queue & Cargo Rules */}
-        <div
-          className={`lg:col-span-4 p-5 sm:p-6 rounded-2xl border flex flex-col justify-between space-y-4 ${
-            isDark ? 'bg-[#14171e] border-[#252b36]' : 'bg-white border-[#e5dfd2] shadow-sm'
+      <div
+        className={`rounded-xl border p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between ${
+          isDark ? 'bg-[#14171e] border-[#252b36]' : 'bg-white border-[#e5dfd2]'
+        }`}
+      >
+        <p className="flex items-start gap-2 text-xs leading-relaxed text-neutral-400">
+          <FileText className="mt-0.5 w-4 h-4 shrink-0 text-emerald-400" />
+          Trip status refreshes automatically. Complete a dispatched trip after delivery to record your final odometer and fuel used.
+        </p>
+        <button
+          type="button"
+          onClick={() => void refreshData()}
+          className={`inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+            isDark
+              ? 'border-[#262d3a] bg-[#151921] text-neutral-300 hover:bg-[#1d232f]'
+              : 'border-[#ded7ca] bg-white text-neutral-700 hover:bg-neutral-100'
           }`}
         >
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Package className="w-5 h-5 text-emerald-400" />
-                <h3 className="font-bold text-base">Departure Queue</h3>
-              </div>
-              <span className="text-xs font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 font-bold">
-                {pendingDispatches.length} Pending
-              </span>
-            </div>
-            <p className="text-xs text-neutral-400 mb-4">
-              Dispatches ready for departure. Confirm manifest and launch transit.
-            </p>
-
-            <div className="space-y-3">
-              {pendingDispatches.length === 0 ? (
-                <div
-                  className={`p-4 rounded-xl border text-center text-xs ${
-                    isDark ? 'bg-[#161a22] border-[#232938] text-neutral-400' : 'bg-neutral-50 border-[#ded7ca] text-neutral-600'
-                  }`}
-                >
-                  <CheckCircle2 className="w-6 h-6 text-emerald-400 mx-auto mb-1.5" />
-                  <p className="font-bold">No Pending Dispatches</p>
-                  <p className="text-[11px] text-neutral-400">All planned cargo is currently in transit or completed.</p>
-                </div>
-              ) : (
-                pendingDispatches.map((t) => (
-                  <div
-                    key={t.id}
-                    className={`p-3 rounded-xl border text-xs ${
-                      isDark
-                        ? 'bg-[#181c25] border-[#28303f] text-neutral-200'
-                        : 'bg-neutral-50 border-[#ded7ca] text-neutral-900'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between font-bold mb-1">
-                      <span className="font-mono text-emerald-400">{t.tripCode}</span>
-                      <span className="text-[11px] text-neutral-400">{t.cargoWeightKg.toLocaleString()} kg</span>
-                    </div>
-                    <div className="text-[11px] font-semibold mb-1">
-                      {t.source} → {t.destination}
-                    </div>
-                    <div className="text-[10px] text-neutral-400 flex items-center justify-between">
-                      <span>{t.vehicleName} · {t.driverName}</span>
-                      <button
-                        onClick={() => dispatchTrip(t.id)}
-                        className={`px-2.5 py-1 rounded-md text-[10px] font-bold ${
-                          isDark
-                            ? 'bg-emerald-400 text-black hover:bg-emerald-300'
-                            : 'bg-emerald-600 text-white hover:bg-emerald-700'
-                        }`}
-                      >
-                        Dispatch Now
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div
-            className={`p-3.5 rounded-xl text-[11px] leading-relaxed border ${
-              isDark ? 'bg-[#161a22] border-[#222733] text-neutral-400' : 'bg-neutral-100 border-[#ded7ca] text-neutral-600'
-            }`}
-          >
-            <div className="flex items-center gap-1.5 font-bold text-neutral-300 mb-1">
-              <FileText className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Driver Turn-In Protocol</span>
-            </div>
-            When concluding a route, click <strong>Complete Delivery</strong> to register final odometer reading and liters of fuel consumed.
-          </div>
-        </div>
+          <RefreshCw className="w-3.5 h-3.5" />
+          Refresh trips
+        </button>
       </div>
 
-      {/* Dispatches Execution Table */}
+      {/* Each assigned trip appears once in this table. */}
       <div
         className={`p-5 sm:p-6 rounded-2xl border ${
           isDark ? 'bg-[#14171e] border-[#252b36]' : 'bg-white border-[#e5dfd2] shadow-sm'
@@ -270,9 +152,9 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
       >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-4 border-b border-inherit gap-2">
           <div>
-            <h3 className="font-bold text-base">Active Trips &amp; Delivery Desk</h3>
+            <h3 className="font-bold text-base">Assigned Trips</h3>
             <p className="text-xs text-neutral-400">
-              Manage live trips, execute dispatches, and record delivery completions
+              View only trips assigned to your driver account. Complete a dispatched trip after delivery.
             </p>
           </div>
           <button
@@ -281,7 +163,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
               isDark ? 'text-emerald-400' : 'text-emerald-600'
             }`}
           >
-            <span>All Trips ({trips.length})</span>
+            <span>My Trips ({trips.length})</span>
             <ArrowUpRight className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -296,7 +178,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
                 <th className="pb-3">Driver</th>
                 <th className="pb-3">Cargo Weight</th>
                 <th className="pb-3">Status</th>
-                <th className="pb-3 text-right pr-2">Execution Action</th>
+                <th className="pb-3 text-right pr-2">Delivery Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-inherit font-medium">
@@ -360,26 +242,9 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
                           >
                             Complete Delivery
                           </button>
-                          <button
-                            onClick={() => cancelTrip(t.id)}
-                            className="px-2 py-1 rounded-lg text-[11px] text-red-400 hover:bg-red-500/10 transition-colors"
-                          >
-                            Cancel
-                          </button>
                         </div>
                       )}
-                      {isDraft && (
-                        <button
-                          onClick={() => dispatchTrip(t.id)}
-                          className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all ${
-                            isDark
-                              ? 'bg-emerald-400 text-black hover:bg-emerald-300'
-                              : 'bg-emerald-600 text-white hover:bg-emerald-700'
-                          }`}
-                        >
-                          Dispatch Now
-                        </button>
-                      )}
+                      {isDraft && <span className="text-[11px] text-amber-500">Awaiting dispatch</span>}
                       {isCompleted && (
                         <span className="text-[11px] text-neutral-400 font-mono">
                           Finished ({t.finalOdometerKm} km)

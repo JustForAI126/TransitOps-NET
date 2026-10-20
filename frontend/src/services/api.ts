@@ -30,6 +30,16 @@ interface CreateOrganizationUser {
   licenseExpiryDate?: string;
 }
 
+interface UpdateOrganizationUser {
+  fullName: string;
+  email: string;
+  role: Exclude<UserRole, 'organization_admin'>;
+  contactNumber?: string;
+  licenseNumber?: string;
+  licenseCategory?: string;
+  licenseExpiryDate?: string;
+}
+
 interface AuthUserResponse {
   id: string;
   fullName: string;
@@ -38,6 +48,42 @@ interface AuthUserResponse {
   tenantId: string;
   isDemoAccount: boolean;
   avatarUrl?: string;
+}
+
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  amountPaise: number;
+  currency: string;
+  termMonths: number;
+  features: string[];
+}
+
+export interface PurchaseSession {
+  purchaseId: string;
+  purchaseSecret: string;
+  verificationEmailSent: boolean;
+  message: string;
+}
+
+export interface PurchaseProgress {
+  emailVerified: boolean;
+  paymentVerified: boolean;
+  receiptEmailSent: boolean;
+  setupEmailSent: boolean;
+  setupCompleted: boolean;
+  orderId: string | null;
+  planId: string | null;
+  setupLinkExpiresAtUtc: string | null;
+  paymentStatus: string;
+}
+
+export interface PaymentVerification {
+  verified: boolean;
+  receiptEmailSent: boolean;
+  setupEmailSent: boolean;
+  setupCompleted: boolean;
+  message: string;
 }
 
 export class ApiRequestError extends Error {
@@ -136,6 +182,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     ...options,
     headers,
     credentials: 'include',
+    cache: options.cache ?? 'no-store',
   });
 
   if (!response.ok) {
@@ -162,7 +209,10 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 }
 
 async function requestBlob(endpoint: string): Promise<Blob> {
-  const response = await fetch(`${API_BASE}${endpoint}`, { credentials: 'include' });
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    credentials: 'include',
+    cache: 'no-store',
+  });
   if (!response.ok) {
     let message = `Request failed: ${response.status} ${response.statusText}`;
     try {
@@ -190,6 +240,62 @@ export const api = {
     },
   },
 
+  onboarding: {
+    getPlans: () => request<SubscriptionPlan[]>('/onboarding/plans'),
+    begin: (data: { organizationName: string; fullName: string; email: string }) =>
+      request<PurchaseSession>('/onboarding/begin', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    verifyEmail: (purchase: PurchaseSession, code: string) =>
+      request<{ verified: boolean; message: string }>('/onboarding/verify-email', {
+        method: 'POST',
+        body: JSON.stringify({ ...purchase, code }),
+      }),
+    resendVerification: (purchase: PurchaseSession) =>
+      request<{ emailSent: boolean; message: string }>('/onboarding/resend-verification', {
+        method: 'POST',
+        body: JSON.stringify(purchase),
+      }),
+    createOrder: (purchase: PurchaseSession, planId: string) =>
+      request<{
+        orderId: string;
+        publicKeyId: string;
+        amountPaise: number;
+        currency: string;
+        planId: string;
+        planName: string;
+        termMonths: number;
+      }>('/onboarding/orders', {
+        method: 'POST',
+        body: JSON.stringify({ ...purchase, planId }),
+      }),
+    verifyPayment: (data: {
+      razorpayOrderId: string;
+      razorpayPaymentId: string;
+      razorpaySignature: string;
+    }) =>
+      request<PaymentVerification>('/onboarding/verify-payment', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    getProgress: (purchase: PurchaseSession) =>
+      request<PurchaseProgress>('/onboarding/progress', {
+        method: 'POST',
+        body: JSON.stringify(purchase),
+      }),
+    retryEmails: (purchase: PurchaseSession) =>
+      request<PaymentVerification>('/onboarding/retry-emails', {
+        method: 'POST',
+        body: JSON.stringify(purchase),
+      }),
+    completeSetup: (token: string, password: string) =>
+      request<{ email: string }>('/onboarding/complete-account-setup', {
+        method: 'POST',
+        body: JSON.stringify({ token, password }),
+      }),
+  },
+
   organizationUsers: {
     getAll: async () => request<OrganizationUser[]>('/admin/users'),
     create: async (data: CreateOrganizationUser) =>
@@ -197,6 +303,13 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ ...data, role: roleToApi[data.role] }),
       }),
+    update: async (id: string, data: UpdateOrganizationUser) =>
+      request<OrganizationUser>(`/admin/users/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ ...data, role: roleToApi[data.role] }),
+      }),
+    delete: async (id: string) =>
+      request<void>(`/admin/users/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   },
 
   reports: {

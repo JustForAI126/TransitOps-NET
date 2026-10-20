@@ -31,7 +31,9 @@ export const TripsView: React.FC<TripsViewProps> = ({
   const { trips, vehicles, currentUser, dispatchTrip, cancelTrip, exportToCSV } = useApp();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
-  const canManageTrips = currentUser?.role === 'fleet_manager' || currentUser?.role === 'driver';
+  const canManageTrips = currentUser?.role === 'fleet_manager';
+  const canCompleteTrips = canManageTrips || currentUser?.role === 'driver';
+  const canDownloadTripReceipt = canCompleteTrips;
   const canExportTrips = currentUser?.role === 'fleet_manager' || currentUser?.role === 'financial_analyst';
   const canViewFinancials = currentUser?.role === 'fleet_manager' || currentUser?.role === 'financial_analyst';
 
@@ -133,11 +135,11 @@ export const TripsView: React.FC<TripsViewProps> = ({
             <span>TRANSITOPS</span>
             <span>/</span>
             <span className={`font-semibold ${isDark ? 'text-[#ccff00]' : 'text-[#d97706]'}`}>
-              DISPATCH DESK
+              {currentUser?.role === 'driver' ? 'MY ASSIGNMENTS' : 'DISPATCH DESK'}
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            Trip Manifest &amp; Live Dispatches
+            {currentUser?.role === 'driver' ? 'My Assigned Trips' : 'Trip Manifest & Live Dispatches'}
           </h1>
         </div>
 
@@ -235,7 +237,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
                 {canViewFinancials && <th className="py-3">Est. Revenue</th>}
                 <th className="py-3">Status</th>
                 <th className="py-3 text-right pr-4">
-                  {canManageTrips ? 'Operational Action' : 'Trip Details'}
+                  {canCompleteTrips ? 'Trip Action' : 'Trip Details'}
                 </th>
               </tr>
             </thead>
@@ -247,7 +249,9 @@ export const TripsView: React.FC<TripsViewProps> = ({
                       <Route className="w-10 h-10 mx-auto opacity-40 text-amber-500" />
                       <p className="font-bold text-sm">No Dispatches Scheduled</p>
                       <p className="text-xs">
-                        {canManageTrips
+                        {currentUser?.role === 'driver'
+                          ? 'No trips are currently assigned to your driver account.'
+                          : canManageTrips
                           ? 'No active or draft trips in this workspace. Plan your first cargo route.'
                           : 'No trips are available in this workspace.'}
                       </p>
@@ -341,7 +345,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
                           </button>
                         </div>
                       )}
-                      {canManageTrips && t.status === 'Dispatched' && (
+                      {canCompleteTrips && t.status === 'Dispatched' && (
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => onOpenCompleteTripModal(t)}
@@ -350,19 +354,21 @@ export const TripsView: React.FC<TripsViewProps> = ({
                             <CheckCircle2 className="w-3.5 h-3.5" />
                             <span>Complete Delivery</span>
                           </button>
-                          <button
-                            onClick={() => cancelTrip(t.id)}
-                            className="text-xs text-red-400 hover:underline"
-                          >
-                            Abort
-                          </button>
+                          {canManageTrips && (
+                            <button
+                              onClick={() => cancelTrip(t.id)}
+                              className="text-xs text-red-400 hover:underline"
+                            >
+                              Abort
+                            </button>
+                          )}
                         </div>
                       )}
                       {t.status === 'Completed' && (
                         <div className="text-[11px] text-neutral-400 space-y-1">
                           <div>Final: {t.finalOdometerKm?.toLocaleString()} km</div>
                           <div>Fuel: {t.fuelConsumedLiters} L</div>
-                          {canManageTrips && (
+                          {canDownloadTripReceipt && (
                             <button
                               onClick={() => void downloadTurnInReceipt(t)}
                               disabled={downloadingReceiptFor === t.id}

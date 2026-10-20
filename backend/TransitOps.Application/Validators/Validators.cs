@@ -35,9 +35,29 @@ public class CreateOrganizationUserValidator : AbstractValidator<CreateOrganizat
             .WithMessage("Organization administrators can only be provisioned through the trusted organization setup process.");
         When(x => x.Role == UserRole.Driver, () =>
         {
-            RuleFor(x => x.ContactNumber).NotEmpty().MaximumLength(32);
-            RuleFor(x => x.LicenseNumber).NotEmpty().MaximumLength(64);
-            RuleFor(x => x.LicenseCategory).NotEmpty().MaximumLength(64);
+            RuleFor(x => x.ContactNumber).NotEmpty().Must(value => !string.IsNullOrWhiteSpace(value)).MaximumLength(32);
+            RuleFor(x => x.LicenseNumber).NotEmpty().Must(value => !string.IsNullOrWhiteSpace(value)).MaximumLength(64);
+            RuleFor(x => x.LicenseCategory).NotEmpty().Must(value => !string.IsNullOrWhiteSpace(value)).MaximumLength(64);
+            RuleFor(x => x.LicenseExpiryDate).NotNull();
+        });
+    }
+}
+
+public class UpdateOrganizationUserValidator : AbstractValidator<UpdateOrganizationUserRequest>
+{
+    public UpdateOrganizationUserValidator()
+    {
+        RuleFor(x => x.FullName)
+            .NotEmpty().Must(value => !string.IsNullOrWhiteSpace(value))
+            .MaximumLength(100);
+        RuleFor(x => x.Email)
+            .NotEmpty().EmailAddress().MaximumLength(256);
+        RuleFor(x => x.Role).IsInEnum();
+        When(x => x.Role == UserRole.Driver, () =>
+        {
+            RuleFor(x => x.ContactNumber).NotEmpty().Must(value => !string.IsNullOrWhiteSpace(value)).MaximumLength(32);
+            RuleFor(x => x.LicenseNumber).NotEmpty().Must(value => !string.IsNullOrWhiteSpace(value)).MaximumLength(64);
+            RuleFor(x => x.LicenseCategory).NotEmpty().Must(value => !string.IsNullOrWhiteSpace(value)).MaximumLength(64);
             RuleFor(x => x.LicenseExpiryDate).NotNull();
         });
     }

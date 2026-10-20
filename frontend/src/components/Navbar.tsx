@@ -85,8 +85,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Right Controls */}
         <div className="flex items-center gap-2.5">
-          {/* Quick Action Button (Fleet Manager or Driver only) */}
-          {!isPublicView && (userRole === 'fleet_manager' || userRole === 'driver') && onOpenNewTripModal && (
+          {/* Trip creation is a Fleet Manager action. */}
+          {!isPublicView && userRole === 'fleet_manager' && onOpenNewTripModal && (
             <button
               onClick={onOpenNewTripModal}
               className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm ${

@@ -1,4 +1,5 @@
 using System.Data;
+using System.Security.Claims;
 using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -37,8 +38,13 @@ public class TripsController : ControllerBase
     private string GetTenantId() => User.FindFirst("tenant_id")?.Value
         ?? throw new UnauthorizedAccessException("The authenticated user has no tenant.");
 
+    private string? GetUserId() =>
+        User.FindFirst(ClaimTypes.NameIdentifier)?.Value ??
+        User.FindFirst("sub")?.Value;
+
     [HttpGet]
     [Authorize(Roles = "FleetManager,Driver,FinancialAnalyst")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<IActionResult> GetAll(
         [FromQuery] string? status,
         [FromQuery] string? search,
@@ -49,6 +55,15 @@ public class TripsController : ControllerBase
             .Include(t => t.Vehicle)
             .Include(t => t.Driver)
             .Where(t => t.TenantId == tenantId);
+
+        if (User.IsInRole(UserRole.Driver.ToString()))
+        {
+            var userId = GetUserId();
+            if (userId is null)
+                return Ok(Array.Empty<TripResponse>());
+
+            query = query.Where(trip => trip.Driver.IdentityUserId == userId);
+        }
 
         if (!string.IsNullOrWhiteSpace(status))
         {
@@ -72,7 +87,7 @@ public class TripsController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "FleetManager,Driver")]
+    [Authorize(Roles = "FleetManager")]
     public async Task<IActionResult> Create([FromBody] CreateTripRequest req, CancellationToken cancellationToken)
     {
         var validation = await _createValidator.ValidateAsync(req, cancellationToken);
@@ -149,7 +164,7 @@ public class TripsController : ControllerBase
     }
 
     [HttpPost("{id:guid}/dispatch")]
-    [Authorize(Roles = "FleetManager,Driver")]
+    [Authorize(Roles = "FleetManager")]
     public async Task<IActionResult> Dispatch(Guid id, CancellationToken cancellationToken)
     {
         var tenantId = GetTenantId();
@@ -222,6 +237,12 @@ public class TripsController : ControllerBase
 
             if (trip == null) return NotFound();
 
+            if (User.IsInRole(UserRole.Driver.ToString()) &&
+                !string.Equals(trip.Driver.IdentityUserId, GetUserId(), StringComparison.Ordinal))
+            {
+                return Forbid();
+            }
+
             if (trip.Status != TripStatus.Dispatched)
                 return BadRequest(new { message = "Only dispatched trips can be completed." });
 
@@ -273,7 +294,7 @@ public class TripsController : ControllerBase
     }
 
     [HttpPost("{id:guid}/cancel")]
-    [Authorize(Roles = "FleetManager,Driver")]
+    [Authorize(Roles = "FleetManager")]
     public async Task<IActionResult> Cancel(Guid id, CancellationToken cancellationToken)
     {
         var tenantId = GetTenantId();

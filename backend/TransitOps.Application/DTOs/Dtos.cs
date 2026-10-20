@@ -6,13 +6,32 @@ namespace TransitOps.Application.DTOs;
 public sealed record LoginRequest(string Email, string Password);
 
 /// <summary>Information about an account in an organization.</summary>
-public sealed record OrganizationUserResponse(string Id, string FullName, string Email, string Role, Guid? DriverId);
+public sealed record OrganizationUserResponse(
+    string Id,
+    string FullName,
+    string Email,
+    string Role,
+    Guid? DriverId,
+    string? ContactNumber = null,
+    string? LicenseNumber = null,
+    string? LicenseCategory = null,
+    DateOnly? LicenseExpiryDate = null);
 
 /// <summary>Details an organization administrator needs to provision a user account.</summary>
 public sealed record CreateOrganizationUserRequest(
     string FullName,
     string Email,
     string Password,
+    UserRole Role,
+    string? ContactNumber,
+    string? LicenseNumber,
+    string? LicenseCategory,
+    DateOnly? LicenseExpiryDate);
+
+/// <summary>Editable organization account details and assigned built-in role.</summary>
+public sealed record UpdateOrganizationUserRequest(
+    string FullName,
+    string Email,
     UserRole Role,
     string? ContactNumber,
     string? LicenseNumber,

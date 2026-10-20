@@ -37,7 +37,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   const hasFleetData = vehicles.length > 0;
   // For newly created fresh account, start in Getting Started view unless they already have vehicles
-  const isFreshAccount = !isDemo && !hasFleetData;
+  const isFreshAccount = !isDemo && userRole !== 'driver' && !hasFleetData;
   const [activeTab, setActiveTab] = useState<'onboarding' | 'dashboard'>(
     isFreshAccount ? 'onboarding' : 'dashboard'
   );
@@ -86,7 +86,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               }`}
             >
               <LayoutDashboard className="w-3.5 h-3.5" />
-              <span>Fleet Operations Dashboard</span>
+              <span>{userRole === 'safety_officer' ? 'Safety Dashboard' : 'Fleet Operations Dashboard'}</span>
             </button>
           </div>
           <span className="text-xs text-neutral-400 font-mono hidden sm:inline">
@@ -124,7 +124,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           {userRole === 'driver' && (
             <DriverDashboard
-              onOpenNewTripModal={onOpenNewTripModal}
               onOpenCompleteTripModal={onOpenCompleteTripModal}
             />
           )}

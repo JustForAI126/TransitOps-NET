@@ -15,6 +15,10 @@ public class TransitOpsDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Trip> Trips => Set<Trip>();
     public DbSet<MaintenanceRecord> MaintenanceRecords => Set<MaintenanceRecord>();
     public DbSet<ExpenseRecord> Expenses => Set<ExpenseRecord>();
+    public DbSet<Organization> Organizations => Set<Organization>();
+    public DbSet<OrganizationSubscription> OrganizationSubscriptions => Set<OrganizationSubscription>();
+    public DbSet<SaasPurchase> SaasPurchases => Set<SaasPurchase>();
+    public DbSet<RazorpayWebhookReceipt> RazorpayWebhookReceipts => Set<RazorpayWebhookReceipt>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -24,6 +28,71 @@ public class TransitOpsDbContext : IdentityDbContext<ApplicationUser>
         modelBuilder.Entity<ApplicationUser>(entity =>
         {
             entity.Property(u => u.Role).HasConversion<string>();
+        });
+
+        modelBuilder.Entity<Organization>(entity =>
+        {
+            entity.HasKey(organization => organization.TenantId);
+            entity.Property(organization => organization.TenantId).HasMaxLength(64);
+            entity.Property(organization => organization.Name).HasMaxLength(200).IsRequired();
+            entity.Property(organization => organization.BillingEmail).HasMaxLength(256).IsRequired();
+            entity.Property(organization => organization.NormalizedBillingEmail).HasMaxLength(256).IsRequired();
+            entity.HasIndex(organization => organization.NormalizedBillingEmail)
+                .IsUnique()
+                .HasDatabaseName("UX_Organizations_NormalizedBillingEmail");
+        });
+
+        modelBuilder.Entity<OrganizationSubscription>(entity =>
+        {
+            entity.HasKey(subscription => subscription.Id);
+            entity.Property(subscription => subscription.PlanId).HasMaxLength(64).IsRequired();
+            entity.Property(subscription => subscription.PlanName).HasMaxLength(120).IsRequired();
+            entity.Property(subscription => subscription.Currency).HasMaxLength(3).IsRequired();
+            entity.Property(subscription => subscription.Status).HasMaxLength(32).IsRequired();
+            entity.Property(subscription => subscription.RazorpayOrderId).HasMaxLength(64).IsRequired();
+            entity.Property(subscription => subscription.RazorpayPaymentId).HasMaxLength(64).IsRequired();
+            entity.HasIndex(subscription => subscription.RazorpayOrderId)
+                .IsUnique()
+                .HasDatabaseName("UX_OrganizationSubscriptions_RazorpayOrderId");
+            entity.HasIndex(subscription => subscription.RazorpayPaymentId)
+                .IsUnique()
+                .HasDatabaseName("UX_OrganizationSubscriptions_RazorpayPaymentId");
+            entity.HasOne<Organization>()
+                .WithMany()
+                .HasForeignKey(subscription => subscription.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<SaasPurchase>(entity =>
+        {
+            entity.HasKey(purchase => purchase.Id);
+            entity.Property(purchase => purchase.OrganizationName).HasMaxLength(200).IsRequired();
+            entity.Property(purchase => purchase.FullName).HasMaxLength(200).IsRequired();
+            entity.Property(purchase => purchase.Email).HasMaxLength(256).IsRequired();
+            entity.Property(purchase => purchase.NormalizedEmail).HasMaxLength(256).IsRequired();
+            entity.Property(purchase => purchase.CapabilityTokenHash).HasMaxLength(64).IsRequired();
+            entity.Property(purchase => purchase.PaymentStatus).HasMaxLength(40).IsRequired();
+            entity.Property(purchase => purchase.RazorpayOrderId).HasMaxLength(64);
+            entity.Property(purchase => purchase.RazorpayPaymentId).HasMaxLength(64);
+            entity.Property(purchase => purchase.SetupTokenHash).HasMaxLength(64);
+            entity.HasIndex(purchase => purchase.RazorpayOrderId)
+                .IsUnique()
+                .HasDatabaseName("UX_SaasPurchases_RazorpayOrderId");
+            entity.HasIndex(purchase => purchase.RazorpayPaymentId)
+                .IsUnique()
+                .HasDatabaseName("UX_SaasPurchases_RazorpayPaymentId");
+            entity.HasIndex(purchase => purchase.SetupTokenHash)
+                .IsUnique()
+                .HasDatabaseName("UX_SaasPurchases_SetupTokenHash");
+        });
+
+        modelBuilder.Entity<RazorpayWebhookReceipt>(entity =>
+        {
+            entity.HasKey(receipt => receipt.Id);
+            entity.Property(receipt => receipt.EventId).HasMaxLength(128).IsRequired();
+            entity.HasIndex(receipt => receipt.EventId)
+                .IsUnique()
+                .HasDatabaseName("UX_RazorpayWebhookReceipts_EventId");
         });
 
         // VEHICLE

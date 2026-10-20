@@ -62,6 +62,10 @@ export interface OrganizationUser {
   email: string;
   role: UserRole;
   driverId: string | null;
+  contactNumber: string | null;
+  licenseNumber: string | null;
+  licenseCategory: string | null;
+  licenseExpiryDate: string | null;
 }
 
 export interface VehicleDocument {

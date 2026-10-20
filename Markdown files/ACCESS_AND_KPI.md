@@ -8,7 +8,7 @@ The application defines `OrganizationAdmin`, `FleetManager`, `Driver`, `SafetyOf
 
 The initial production Organization Admin provisioning flow after a software purchase is not connected to a billing provider. Local Development seeds a demo Organization Admin for exercising the dashboard; production onboarding must only provision this role through a trusted purchase fulfillment operation.
 
-**Driver/Dispatcher mismatch and required design decision:** the original brief names “Driver or Dispatcher” as alternatives. This application defines `Driver`, and grants that role trip creation, dispatch, completion, and cancellation endpoints. Admin-created Driver accounts now have linked tenant-scoped Driver profiles, but trip authorization is still tenant-wide rather than restricted to the linked driver's trips. Before production use, decide whether this role is intended to be a dispatcher or enforce linked-driver ownership on trip reads and mutations. Do not interpret `Driver` as a separate `Dispatcher` role.
+**Driver/Dispatcher distinction:** the application defines `Driver`, not a separate `Dispatcher` role. A Driver can view and complete trips assigned to the linked driver profile only. A Driver without a linked profile sees no trips. Creating, dispatching, and cancelling trips are Fleet Manager actions.
 
 ## Current permission matrix
 
@@ -22,21 +22,22 @@ The initial production Organization Admin provisioning flow after a software pur
 | Drivers: view | — | V | — | V | — | Fleet Manager and Safety Officer can view profile/contact/license data. |
 | Drivers: create | — | C | — | — | — | Fleet Manager only. |
 | Drivers: update/suspend/remind | — | U | — | U | — | Fleet Manager and Safety Officer; current update endpoint permits profile edits to either role. |
-| Trips: view | — | V | V | — | V | Tenant-scoped. Financial values are not returned to Driver. |
-| Trips: create/dispatch/complete/cancel | — | C/Dsp/Cmp/Can | C/Dsp/Cmp/Can | — | — | Current Driver access is tenant-wide; see the Driver/Dispatcher decision above. |
+| Trips: view | — | V | Assigned trips only | — | V | Tenant-scoped. Financial values are not returned to Driver. |
+| Trips: create/dispatch/cancel | — | C/Dsp/Can | — | — | — | Fleet Manager only. |
+| Trips: complete | — | Cmp | Assigned dispatched trips only | — | — | Driver completion checks the linked driver profile on the API. |
 | Maintenance: view | — | V | — | V | V | Financial Analyst read access supports cost analysis; writes remain Fleet Manager only. |
 | Maintenance: create/close | — | C/U | — | — | — | Fleet Manager only. |
 | Expenses: view/create/delete | — | V/C/D | — | — | V/C/D | Financial Analyst and Fleet Manager. |
 | Fleet/driver/safety/financial KPIs | — | Fleet | Driver | Safety | Financial | Each KPI endpoint is role-protected and tenant-scoped. |
 | Trip CSV export | — | X | — | — | X | Financial fields are provided only to Fleet Manager and Financial Analyst. |
 | Financial ledger PDF export | — | — | — | — | X | Financial Analyst only. |
-| Trip PDF manifest | — | X | X | — | — | Fleet Manager and Driver. |
+| Trip PDF turn-in receipt | — | X | Assigned trips only | — | — | Driver receipt access is checked against the linked driver profile. |
 | Fleet vehicle ROI PDF | — | X | — | — | — | Fleet Manager only; uses completed-trip revenue and maintenance/fuel costs per vehicle. |
 | Organization account list/create operational accounts | C | — | — | — | — | Organization Admin only; tenant-scoped. Driver account creation also creates a linked Driver profile. |
 | Create or promote Organization Admin | — | — | — | — | — | Not available through the public API or Organization Admin dashboard; requires trusted purchase provisioning. |
 | Hangfire dashboard | — | Fleet Manager | — | — | — | Restricted to authenticated Fleet Managers. |
 
-The Safety Officer can currently update driver details and status, while Fleet Managers can modify driver records and vehicle operations. Whether Safety Officers should be read-only or allowed to change non-safety fields is a product-policy decision. Similarly, permission rules for individual trip ownership remain unresolved as stated above.
+The Safety Officer can update driver details and status, send license reminders, and view maintenance records; maintenance creation and closure remain Fleet Manager actions. Fleet Managers can modify driver records and vehicle operations. Driver trip ownership is checked by the API for trip reads, completion, and PDF receipts.
 
 ## Tenant and sensitive-data boundaries
 
@@ -82,7 +83,6 @@ No reporting-period filter is currently defined; financial totals cover all pers
 
 ## Remaining product decisions
 
-- Whether the `Driver` role should instead be a distinct `Dispatcher`, or must only operate trips assigned to a linked driver profile.
 - Whether Financial Analysts may view more than aggregate maintenance costs.
 - Whether global uniqueness for vehicle registrations and driver email/license values is intended, or should be tenant-local.
 - Whether dashboard financial totals need a reporting period, and what date basis to use.

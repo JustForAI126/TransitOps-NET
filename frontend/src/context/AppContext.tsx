@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import {
   UserRole,
   UserAccount,
@@ -15,6 +15,8 @@ import { realtime } from '../services/signalr';
 export type ActiveView =
   | 'hero'
   | 'login'
+  | 'purchase'
+  | 'setup_account'
   | 'organization_admin'
   | 'dashboard'
   | 'vehicles'
@@ -28,6 +30,8 @@ export type ActiveView =
 const viewPaths: Record<ActiveView, string> = {
   hero: '/',
   login: '/login',
+  purchase: '/purchase',
+  setup_account: '/setup-account',
   organization_admin: '/admin',
   dashboard: '/dashboard',
   vehicles: '/vehicles',
@@ -75,7 +79,7 @@ interface AppContextType {
   expenses: FuelExpenseRecord[];
   isLoadingData: boolean;
   dataLoadError: string | null;
-  refreshData: () => Promise<void>;
+  refreshData: (silent?: boolean) => Promise<void>;
 
   // Filter State
   searchQuery: string;
@@ -177,6 +181,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
+  const refreshRequestId = useRef(0);
   const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecord[]>([]);
   const [expenses, setExpenses] = useState<FuelExpenseRecord[]>([]);
 
@@ -258,7 +263,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           avatarUrl: profile.avatarUrl,
         };
         setCurrentUser(user);
-        setActiveView(profile.role === 'organization_admin' ? 'organization_admin' : 'dashboard');
+        const requestedView = viewFromPath();
+        if (requestedView !== 'purchase' && requestedView !== 'setup_account') {
+          setActiveView(profile.role === 'organization_admin' ? 'organization_admin' : 'dashboard');
+        }
       })
       .catch((err) => {
         if (!(err instanceof ApiRequestError && err.status === 401)) {
@@ -267,7 +275,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (cancelled) return;
         setCurrentUser(null);
         setNotifications([]);
-        setActiveView(viewFromPath() === 'hero' ? 'hero' : 'login');
+        const requestedView = viewFromPath();
+        setActiveView(
+          ['hero', 'login', 'purchase', 'setup_account'].includes(requestedView)
+            ? requestedView
+            : 'login',
+        );
       });
     return () => {
       cancelled = true;
@@ -275,7 +288,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   // Fetch operational data from API
-  const refreshData = useCallback(async () => {
+  const refreshData = useCallback(async (silent = false) => {
+    const requestId = ++refreshRequestId.current;
+
     if (!currentUser) {
       setVehicles([]);
       setDrivers([]);
@@ -297,7 +312,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    setIsLoadingData(true);
+    if (!silent) setIsLoadingData(true);
     try {
       const [v, d, t, m, e] = await Promise.all([
         api.vehicles.getAll(),
@@ -314,6 +329,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ? api.expenses.getAll()
           : Promise.resolve([]),
       ]);
+      if (requestId !== refreshRequestId.current) return;
       setVehicles(Array.isArray(v) ? v : []);
       setDrivers(Array.isArray(d) ? d : []);
       setTrips(Array.isArray(t) ? t : []);
@@ -321,16 +337,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setExpenses(Array.isArray(e) ? e : []);
       setDataLoadError(null);
     } catch (err) {
+      if (requestId !== refreshRequestId.current) return;
       console.error('[TransitOps API] Could not load persisted workspace data:', err);
       setDataLoadError('Workspace data could not be loaded. Check the API connection and retry.');
-      setVehicles([]);
-      setDrivers([]);
-      setTrips([]);
-      setMaintenanceRecords([]);
-      setExpenses([]);
-      addNotification('error', 'Workspace Load Failed', 'Could not load current workspace data. Retry the request.');
+      if (!silent) {
+        setVehicles([]);
+        setDrivers([]);
+        setTrips([]);
+        setMaintenanceRecords([]);
+        setExpenses([]);
+        addNotification('error', 'Workspace Load Failed', 'Could not load current workspace data. Retry the request.');
+      }
     } finally {
-      setIsLoadingData(false);
+      if (requestId === refreshRequestId.current) setIsLoadingData(false);
     }
   }, [currentUser, addNotification]);
 
@@ -341,31 +360,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    realtime.connect();
+    void realtime.connect();
+    const refreshSilently = () => {
+      void refreshData(true);
+    };
 
     const unsubDispatch = realtime.on('trip_dispatched', (data: any) => {
       if (data?.tenantId && currentUser?.tenantId && data.tenantId !== currentUser.tenantId) {
         return;
       }
-      refreshData();
+      refreshSilently();
     });
 
     const unsubComplete = realtime.on('trip_completed', (data: any) => {
       if (data?.tenantId && currentUser?.tenantId && data.tenantId !== currentUser.tenantId) {
         return;
       }
-      refreshData();
+      refreshSilently();
     });
 
     const unsubVehicle = realtime.on('vehicle_status', (data: any) => {
       if (data?.tenantId && currentUser?.tenantId && data.tenantId !== currentUser.tenantId) {
         return;
       }
-      refreshData();
+      refreshSilently();
     });
-    const unsubDriver = realtime.on('driver_status', refreshData);
-    const unsubMaintenance = realtime.on('maintenance_updated', refreshData);
-    const unsubExpense = realtime.on('expense_updated', refreshData);
+    const unsubDriver = realtime.on('driver_status', refreshSilently);
+    const unsubMaintenance = realtime.on('maintenance_updated', refreshSilently);
+    const unsubExpense = realtime.on('expense_updated', refreshSilently);
+
+    let disposed = false;
+    let refreshTimer: number | undefined;
+    if (currentUser.role === 'driver') {
+      const pollDriverTrips = async () => {
+        await refreshData(true);
+        if (!disposed) refreshTimer = window.setTimeout(pollDriverTrips, 10000);
+      };
+      refreshTimer = window.setTimeout(pollDriverTrips, 10000);
+    }
 
     const unsubNotif = realtime.on('notification', (notif: any) => {
       // Discard notifications meant for other tenants
@@ -380,6 +412,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     return () => {
+      disposed = true;
+      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
       unsubDispatch();
       unsubComplete();
       unsubVehicle();

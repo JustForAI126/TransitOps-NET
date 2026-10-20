@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using TransitOps.Api.Hubs;
 using TransitOps.Application.DTOs;
+using TransitOps.Application.Services;
 using TransitOps.Domain.Entities;
 using TransitOps.Domain.Enums;
 using TransitOps.Infrastructure.Persistence;
@@ -22,17 +23,23 @@ public class TripsController : ControllerBase
     private readonly IHubContext<TransitOpsHub, ITransitOpsClient> _hub;
     private readonly IValidator<CreateTripRequest> _createValidator;
     private readonly IValidator<CompleteTripRequest> _completeValidator;
+    private readonly ISafetyScoreService _safety;
+    private readonly decimal _dieselPricePerLitre;
 
     public TripsController(
         TransitOpsDbContext db,
         IHubContext<TransitOpsHub, ITransitOpsClient> hub,
         IValidator<CreateTripRequest> createValidator,
-        IValidator<CompleteTripRequest> completeValidator)
+        IValidator<CompleteTripRequest> completeValidator,
+        ISafetyScoreService safety,
+        IConfiguration configuration)
     {
+        _dieselPricePerLitre = configuration.GetValue("Operations:DieselPricePerLitreInr", 96.5m);
         _db = db;
         _hub = hub;
         _createValidator = createValidator;
         _completeValidator = completeValidator;
+        _safety = safety;
     }
 
     private string GetTenantId() => User.FindFirst("tenant_id")?.Value
@@ -265,7 +272,7 @@ public class TripsController : ControllerBase
 
             if (req.FuelConsumedLiters > 0)
             {
-                decimal fuelCost = req.FuelConsumedLiters * 105m; // ₹105/L
+                var fuelCost = decimal.Round(req.FuelConsumedLiters * _dieselPricePerLitre, 2);
                 _db.Expenses.Add(new ExpenseRecord
                 {
                     TenantId = tenantId,
@@ -279,6 +286,9 @@ public class TripsController : ControllerBase
                 });
             }
 
+            await _db.SaveChangesAsync(cancellationToken);
+            // The completed trip now counts towards experience and fuel discipline.
+            await _safety.RecalculateAsync(trip.DriverId, cancellationToken);
             await _db.SaveChangesAsync(cancellationToken);
             await tx.CommitAsync(cancellationToken);
 

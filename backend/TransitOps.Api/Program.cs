@@ -169,6 +169,7 @@ builder.Services.AddScoped<IHangfireJobs, HangfireJobs>();
 // 6. Application Services & FluentValidation
 builder.Services.AddValidatorsFromAssemblyContaining<CreateVehicleValidator>();
 builder.Services.AddScoped<IKpiService, KpiService>();
+builder.Services.AddScoped<ISafetyScoreService, SafetyScoreService>();
 builder.Services.AddScoped<ICsvExportService, CsvExportService>();
 builder.Services.AddScoped<IPdfReportService, QuestPdfReportService>();
 builder.Services.Configure<SaasOnboardingOptions>(builder.Configuration.GetSection("SaasOnboarding"));
@@ -181,6 +182,7 @@ builder.Services.AddHttpClient("Razorpay", client =>
     client.Timeout = TimeSpan.FromSeconds(20);
 });
 builder.Services.AddScoped<ISaasOnboardingService, SaasOnboardingService>();
+builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 
 // 7. CORS
 builder.Services.AddCors(options =>
@@ -309,12 +311,12 @@ using (var scope = app.Services.CreateScope())
             ALTER TABLE "Drivers" ADD COLUMN IF NOT EXISTS "IdentityUserId" character varying(450);
             CREATE UNIQUE INDEX IF NOT EXISTS "IX_Drivers_IdentityUserId"
                 ON "Drivers" ("IdentityUserId");
-            CREATE UNIQUE INDEX IF NOT EXISTS "UX_Vehicles_NormalizedRegistrationNumber"
-                ON "Vehicles" (upper(btrim("RegistrationNumber")));
+            CREATE UNIQUE INDEX IF NOT EXISTS "UX_Vehicles_Tenant_NormalizedRegistrationNumber"
+                ON "Vehicles" ("TenantId", upper(btrim("RegistrationNumber")));
             CREATE UNIQUE INDEX IF NOT EXISTS "UX_Drivers_NormalizedEmail"
                 ON "Drivers" (upper(btrim("Email")));
-            CREATE UNIQUE INDEX IF NOT EXISTS "UX_Drivers_NormalizedLicenseNumber"
-                ON "Drivers" (upper(btrim("LicenseNumber")));
+            CREATE UNIQUE INDEX IF NOT EXISTS "UX_Drivers_Tenant_NormalizedLicenseNumber"
+                ON "Drivers" ("TenantId", upper(btrim("LicenseNumber")));
             CREATE UNIQUE INDEX IF NOT EXISTS "UX_Trips_OneDispatchedVehicle"
                 ON "Trips" ("VehicleId") WHERE "Status" = 'Dispatched';
             CREATE UNIQUE INDEX IF NOT EXISTS "UX_Trips_OneDispatchedDriver"
@@ -362,7 +364,7 @@ using (var scope = app.Services.CreateScope())
                 TenantId = "demo_tenant",
                 Name = "Rajesh Sharma",
                 LicenseNumber = "MH1420180045921",
-                LicenseCategory = "Heavy Commercial",
+                LicenseCategory = "HGMV",
                 LicenseExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(2)),
                 ContactNumber = "+91 98234 11203",
                 Email = "rajesh.sharma@transitops.com",
@@ -375,7 +377,7 @@ using (var scope = app.Services.CreateScope())
                 TenantId = "demo_tenant",
                 Name = "Sarah Chen",
                 LicenseNumber = "KA0320190012845",
-                LicenseCategory = "Commercial",
+                LicenseCategory = "LMV-TR",
                 LicenseExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(8)),
                 ContactNumber = "+91 94481 22910",
                 Email = "driver@transitops.com",
@@ -403,7 +405,7 @@ using (var scope = app.Services.CreateScope())
 
         if (app.Environment.IsDevelopment())
         {
-            SeedDevelopmentDemoData(db);
+            SeedDevelopmentDemoData(db, app.Configuration.GetValue("Operations:DieselPricePerLitreInr", 96.5m));
 
             var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
             var demoAccounts = new[]
@@ -475,6 +477,10 @@ using (var scope = app.Services.CreateScope())
                 demoDriver.IdentityUserId = driverUser.Id;
                 db.SaveChanges();
             }
+
+            SyncDemoDriverSafetyProfiles(db);
+            scope.ServiceProvider.GetRequiredService<ISafetyScoreService>()
+                .RecalculateAllAsync("demo_tenant").GetAwaiter().GetResult();
         }
     }
     catch (Exception ex)
@@ -489,6 +495,19 @@ recurringJobManager.AddOrUpdate<IHangfireJobs>(
     "daily-license-expiry-check",
     job => job.CheckExpiringLicensesAsync(),
     Cron.Daily(2));
+// Runs after the licence check so newly expired licences are reflected in scores.
+recurringJobManager.AddOrUpdate<IHangfireJobs>(
+    "daily-safety-score-recalculation",
+    job => job.RecalculateSafetyScoresAsync(),
+    Cron.Daily(2, 30));
+recurringJobManager.AddOrUpdate<IHangfireJobs>(
+    "daily-maintenance-audit",
+    job => job.AuditVehicleMaintenanceSchedulesAsync(),
+    Cron.Daily(3));
+recurringJobManager.AddOrUpdate<IHangfireJobs>(
+    "daily-stale-draft-trip-check",
+    job => job.ReconcilePendingTripsAsync(),
+    Cron.Daily(3, 30));
 
 app.Run();
 
@@ -562,7 +581,36 @@ static Npgsql.NpgsqlConnectionStringBuilder BuildNpgsqlConnectionString(string v
     return builder;
 }
 
-static void SeedDevelopmentDemoData(TransitOpsDbContext db)
+// Demo drivers get official licence classes and a recorded incident history so the
+// calculated safety scores show a realistic spread. Incident counts only ever increase,
+// so incidents recorded while demonstrating the app are kept.
+static void SyncDemoDriverSafetyProfiles(TransitOpsDbContext db)
+{
+    var legacyClasses = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Heavy Commercial"] = "HGMV",
+        ["Commercial"] = "LMV-TR"
+    };
+    var seededIncidents = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["arjun.patel@transitops.com"] = 1,
+        ["vikram.reddy@transitops.com"] = 1,
+        ["rohit.verma@transitops.com"] = 2,
+        ["imran.shaikh@transitops.com"] = 3,
+        ["sandeep.yadav@transitops.com"] = 2
+    };
+
+    foreach (var driver in db.Drivers.Where(d => d.TenantId == "demo_tenant").ToList())
+    {
+        if (legacyClasses.TryGetValue(driver.LicenseCategory, out var licenceClass))
+            driver.LicenseCategory = licenceClass;
+        if (seededIncidents.TryGetValue(driver.Email, out var incidents) && driver.IncidentHistoryCount < incidents)
+            driver.IncidentHistoryCount = incidents;
+    }
+    db.SaveChanges();
+}
+
+static void SeedDevelopmentDemoData(TransitOpsDbContext db, decimal dieselPricePerLitre)
 {
     const string tenantId = "demo_tenant";
     var now = DateTime.UtcNow;
@@ -607,16 +655,16 @@ static void SeedDevelopmentDemoData(TransitOpsDbContext db)
 
     var driverSeed = new[]
     {
-        (Name: "Priya Nair", License: "MH1420200087631", Category: "Heavy Commercial", Contact: "+91 98220 34117", Email: "priya.nair@transitops.com", Expiry: now.AddYears(3), Score: 97, Status: DriverStatus.Available),
-        (Name: "Arjun Patel", License: "GJ0120180064219", Category: "Heavy Commercial", Contact: "+91 98790 21568", Email: "arjun.patel@transitops.com", Expiry: now.AddMonths(14), Score: 91, Status: DriverStatus.OnDuty),
-        (Name: "Meera Iyer", License: "TN0920210031884", Category: "Commercial", Contact: "+91 98403 61245", Email: "meera.iyer@transitops.com", Expiry: now.AddYears(2), Score: 99, Status: DriverStatus.Available),
-        (Name: "Vikram Reddy", License: "TS0820190019726", Category: "Heavy Commercial", Contact: "+91 98490 48321", Email: "vikram.reddy@transitops.com", Expiry: now.AddMonths(20), Score: 88, Status: DriverStatus.OffDuty),
-        (Name: "Ananya Singh", License: "DL1L20220087114", Category: "Commercial", Contact: "+91 98110 73926", Email: "ananya.singh@transitops.com", Expiry: now.AddYears(4), Score: 96, Status: DriverStatus.Available),
-        (Name: "Rohit Verma", License: "RJ1420170043892", Category: "Heavy Commercial", Contact: "+91 98290 63815", Email: "rohit.verma@transitops.com", Expiry: now.AddMonths(9), Score: 84, Status: DriverStatus.Available),
-        (Name: "Kavya Rao", License: "KA0320200056310", Category: "Commercial", Contact: "+91 99008 52471", Email: "kavya.rao@transitops.com", Expiry: now.AddYears(2), Score: 98, Status: DriverStatus.Available),
-        (Name: "Imran Shaikh", License: "MH4620160092754", Category: "Heavy Commercial", Contact: "+91 98211 76420", Email: "imran.shaikh@transitops.com", Expiry: now.AddMonths(17), Score: 79, Status: DriverStatus.Suspended),
-        (Name: "Sandeep Yadav", License: "UP3220180028147", Category: "Heavy Commercial", Contact: "+91 98390 52718", Email: "sandeep.yadav@transitops.com", Expiry: now.AddMonths(-2), Score: 73, Status: DriverStatus.Suspended),
-        (Name: "Nisha Menon", License: "KL0720210065402", Category: "Commercial", Contact: "+91 98470 19362", Email: "nisha.menon@transitops.com", Expiry: now.AddMonths(11), Score: 95, Status: DriverStatus.Available)
+        (Name: "Priya Nair", License: "MH1420200087631", Category: "HGMV", Contact: "+91 98220 34117", Email: "priya.nair@transitops.com", Expiry: now.AddYears(3), Score: 97, Status: DriverStatus.Available),
+        (Name: "Arjun Patel", License: "GJ0120180064219", Category: "HGMV", Contact: "+91 98790 21568", Email: "arjun.patel@transitops.com", Expiry: now.AddMonths(14), Score: 91, Status: DriverStatus.OnDuty),
+        (Name: "Meera Iyer", License: "TN0920210031884", Category: "LMV-TR", Contact: "+91 98403 61245", Email: "meera.iyer@transitops.com", Expiry: now.AddYears(2), Score: 99, Status: DriverStatus.Available),
+        (Name: "Vikram Reddy", License: "TS0820190019726", Category: "HGMV", Contact: "+91 98490 48321", Email: "vikram.reddy@transitops.com", Expiry: now.AddMonths(20), Score: 88, Status: DriverStatus.OffDuty),
+        (Name: "Ananya Singh", License: "DL1L20220087114", Category: "LMV-TR", Contact: "+91 98110 73926", Email: "ananya.singh@transitops.com", Expiry: now.AddYears(4), Score: 96, Status: DriverStatus.Available),
+        (Name: "Rohit Verma", License: "RJ1420170043892", Category: "HGMV", Contact: "+91 98290 63815", Email: "rohit.verma@transitops.com", Expiry: now.AddMonths(9), Score: 84, Status: DriverStatus.Available),
+        (Name: "Kavya Rao", License: "KA0320200056310", Category: "LMV-TR", Contact: "+91 99008 52471", Email: "kavya.rao@transitops.com", Expiry: now.AddYears(2), Score: 98, Status: DriverStatus.Available),
+        (Name: "Imran Shaikh", License: "MH4620160092754", Category: "HGMV", Contact: "+91 98211 76420", Email: "imran.shaikh@transitops.com", Expiry: now.AddMonths(17), Score: 79, Status: DriverStatus.Suspended),
+        (Name: "Sandeep Yadav", License: "UP3220180028147", Category: "HGMV", Contact: "+91 98390 52718", Email: "sandeep.yadav@transitops.com", Expiry: now.AddMonths(-2), Score: 73, Status: DriverStatus.Suspended),
+        (Name: "Nisha Menon", License: "KL0720210065402", Category: "LMV-TR", Contact: "+91 98470 19362", Email: "nisha.menon@transitops.com", Expiry: now.AddMonths(11), Score: 95, Status: DriverStatus.Available)
     };
 
     var existingLicenses = db.Drivers
@@ -756,7 +804,7 @@ static void SeedDevelopmentDemoData(TransitOpsDbContext db)
                     VehicleId = trip.VehicleId,
                     TripId = trip.Id,
                     Type = ExpenseType.Fuel,
-                    Amount = decimal.Round(liters * 96.5m, 2),
+                    Amount = decimal.Round(liters * dieselPricePerLitre, 2),
                     Liters = liters,
                     OdometerReading = trip.FinalOdometerKm,
                     ExpenseDate = trip.CompletedAtUtc!.Value,

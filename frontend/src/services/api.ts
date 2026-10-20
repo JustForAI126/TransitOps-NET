@@ -10,6 +10,13 @@ import {
   UserRole,
 } from '../types';
 
+/** Calculated safety score with the factors that produced it (see SafetyScoreCalculator.cs). */
+export interface SafetyScoreBreakdown {
+  score: number;
+  band: string;
+  factors: { factor: string; points: number; detail: string }[];
+}
+
 const API_BASE = '/api';
 const roleToApi: Record<UserRole, string> = {
   organization_admin: 'OrganizationAdmin',
@@ -355,6 +362,10 @@ export const api = {
       fromApiDriver(await request<Driver>(`/drivers/${id}/toggle-suspension`, { method: 'PUT' })),
     sendReminder: async (id: string) =>
       request<{ message: string }>(`/drivers/${id}/send-license-reminder`, { method: 'POST' }),
+    recordIncident: async (id: string) =>
+      fromApiDriver(await request<Driver>(`/drivers/${id}/incidents`, { method: 'POST' })),
+    safetyScore: async (id: string) =>
+      request<SafetyScoreBreakdown>(`/drivers/${id}/safety-score`),
   },
 
   trips: {

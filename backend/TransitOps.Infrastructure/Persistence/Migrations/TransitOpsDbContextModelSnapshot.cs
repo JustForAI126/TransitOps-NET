@@ -17,7 +17,7 @@ namespace TransitOps.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.0")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -305,9 +305,9 @@ namespace TransitOps.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_Drivers_IdentityUserId");
 
-                    b.HasIndex("LicenseNumber")
+                    b.HasIndex("TenantId", "LicenseNumber")
                         .IsUnique()
-                        .HasDatabaseName("IX_Drivers_LicenseNumber");
+                        .HasDatabaseName("IX_Drivers_TenantId_LicenseNumber");
 
                     b.ToTable("Drivers", t =>
                         {
@@ -784,9 +784,9 @@ namespace TransitOps.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("RegistrationNumber")
+                    b.HasIndex("TenantId", "RegistrationNumber")
                         .IsUnique()
-                        .HasDatabaseName("IX_Vehicles_RegistrationNumber");
+                        .HasDatabaseName("IX_Vehicles_TenantId_RegistrationNumber");
 
                     b.ToTable("Vehicles");
                 });

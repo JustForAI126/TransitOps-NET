@@ -22,6 +22,7 @@ The initial production Organization Admin provisioning flow after a software pur
 | Drivers: view | — | V | — | V | — | Fleet Manager and Safety Officer can view profile/contact/license data. |
 | Drivers: create | — | C | — | — | — | Fleet Manager only. |
 | Drivers: update/suspend/remind | — | U | — | U | — | Fleet Manager and Safety Officer; current update endpoint permits profile edits to either role. |
+| Drivers: record incident / view safety-score breakdown | — | C/V | — | C/V | — | `POST /drivers/{id}/incidents`, `GET /drivers/{id}/safety-score`. The score itself cannot be edited by hand. |
 | Trips: view | — | V | Assigned trips only | — | V | Tenant-scoped. Financial values are not returned to Driver. |
 | Trips: create/dispatch/cancel | — | C/Dsp/Can | — | — | — | Fleet Manager only. |
 | Trips: complete | — | Cmp | Assigned dispatched trips only | — | — | Driver completion checks the linked driver profile on the API. |
@@ -45,7 +46,7 @@ The Safety Officer can update driver details and status, send license reminders,
 - The frontend does not store bearer tokens in local storage. Authentication uses an HttpOnly JWT cookie.
 - Fleet Manager and Financial Analyst are the only roles whose vehicle and trip responses include financial fields. The vehicle UI also hides financial detail and financial export columns from other roles.
 - PostgreSQL credentials remain server-side. The RLS scripts intentionally enable RLS without creating permissive public policies; they are not a substitute for the API tenant filters.
-- Vehicle registration numbers and driver email/license numbers are normalized before saving and have unique database indexes. The current uniqueness scope is global, not tenant-local.
+- Vehicle registration numbers and driver licence numbers are normalized before saving and are unique **within an organization** (tenant), so one organization cannot discover another's fleet through a duplicate error. Driver email stays globally unique because Identity account emails are global.
 - Retired vehicles remain in storage and historical records. Active trip or maintenance records prevent retirement.
 
 ## Fleet dashboard KPIs
@@ -84,9 +85,40 @@ No reporting-period filter is currently defined; financial totals cover all pers
 ## Remaining product decisions
 
 - Whether Financial Analysts may view more than aggregate maintenance costs.
-- Whether global uniqueness for vehicle registrations and driver email/license values is intended, or should be tenant-local.
 - Whether dashboard financial totals need a reporting period, and what date basis to use.
 - Whether vehicle utilization should exclude vehicles under maintenance in addition to retired vehicles.
+
+## Fuel cost on trip completion
+
+Completing a trip records a Fuel expense of `litres × Operations:DieselPricePerLitreInr` (default ₹96.50, set in `appsettings.json`). The development seed uses the same setting.
+
+## Licence reminders
+
+`POST /drivers/{id}/send-license-reminder` emails the driver through SMTP with the licence number, expiry status and a link to the Parivahan Sarathi portal. Drivers in the seeded demo tenant are never emailed, because their addresses are made up; the endpoint returns a message saying so.
+
+## Driver safety score
+
+The safety score (0–100) is calculated by `SafetyScoreCalculator` and cannot be typed in. It is recalculated when a driver is created or edited, when a trip is completed, when an incident is recorded, and daily by the `daily-safety-score-recalculation` Hangfire job (02:30 UTC, after the licence-expiry check).
+
+| Factor | Points |
+|---|---|
+| Starting score | 100 |
+| Recorded incidents | −8 each, at most −40 |
+| Licence expired | −25 |
+| Licence expires within 30 days | −5 |
+| Fuel discipline | Completed trips in the last 90 days are inefficient when planned km ÷ fuel litres < 85% of the vehicle's rated km/L. Deduction = 15 × share of inefficient trips, applied once at least 3 trips have fuel data. This is a proxy for harsh acceleration and idling, since there is no telematics data. |
+| Experience | +1 per 25 completed trips, at most +5; it can only recover deductions |
+
+The result is clamped to 0–100. Bands: 90+ Excellent, 75–89 Good, 60–74 Needs attention, below 60 High risk. The Safety Officer dashboard shows the breakdown when the score is clicked. Incidents are stored as a count; there is no dated incident log yet, so incidents never expire from the score.
+
+## Indian licence and registration validation
+
+Rules live in `IndianRegulatoryFormats` (backend) and `frontend/src/utils/indianFormats.ts` (form feedback). The API is authoritative.
+
+- **Vehicle registration** (CMVR 1989 rule 50): `SS-RR-XXX-NNNN`, where SS is a valid state/UT code, RR is a 1–2 digit RTO code (not 00), XXX is an optional 1–3 letter series and NNNN is 0001–9999. Delhi marks with a category letter (`DL-1C-AB-1234`) are supported, as is the Bharat series (`22-BH-1234-AA`, year 21 onwards, no I/O in the series). Numbers are stored in canonical hyphenated form, and duplicates are detected regardless of spacing or hyphens.
+- **Driving licence** (Sarathi format): 15 characters, `SS RR YYYY NNNNNNN`: state code, RTO code, issue year (1950 to the current year) and 7-digit serial. Stored without separators. Older paper licences in other formats must be converted to the Sarathi format first.
+- **Licence class**: one or more of MCWG, MCWOG, LMV, LMV-NT, LMV-TR, MGV, HMV, HGMV, HPMV, HTV, TRANS (Motor Vehicles Act 1988, section 10).
+- **Licence expiry**: no more than 20 years ahead, and not before the issue year in the licence number.
 
 ## Vehicle ROI
 

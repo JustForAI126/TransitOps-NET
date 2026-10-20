@@ -3,6 +3,7 @@ import { X, Truck, AlertCircle, Plus } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useTheme } from '../../context/ThemeContext';
 import { VehicleType } from '../../types';
+import { normalizeRegistration, REGISTRATION_HINT } from '../../utils/indianFormats';
 
 interface AddVehicleModalProps {
   isOpen: boolean;
@@ -30,9 +31,15 @@ export const AddVehicleModal: React.FC<AddVehicleModalProps> = ({ isOpen, onClos
     e.preventDefault();
     setError(null);
 
+    const registration = normalizeRegistration(registrationNumber);
+    if (!registration.ok) {
+      setError(registration.error);
+      return;
+    }
+
     const res = await addVehicle({
-      registrationNumber: registrationNumber.trim(),
-      name: name.trim() || `${type}-${registrationNumber.slice(-4)}`,
+      registrationNumber: registration.value,
+      name: name.trim() || `${type}-${registration.value.slice(-4)}`,
       model: model.trim() || `${type} Standard Edition`,
       type,
       maxCapacityKg: Number(maxCapacityKg),
@@ -103,14 +110,20 @@ export const AddVehicleModal: React.FC<AddVehicleModalProps> = ({ isOpen, onClos
                 type="text"
                 required
                 placeholder="e.g. MH-12-AB-1234"
+                maxLength={20}
                 value={registrationNumber}
-                onChange={(e) => setRegistrationNumber(e.target.value.toUpperCase())}
+                onChange={(e) => { setError(null); setRegistrationNumber(e.target.value.toUpperCase()); }}
+                onBlur={() => {
+                  const registration = normalizeRegistration(registrationNumber);
+                  if (registration.ok) setRegistrationNumber(registration.value);
+                }}
                 className={`w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border outline-none ${
                   isDark
                     ? 'bg-[#191d26] border-[#272e3d] focus:border-[#ccff00]'
                     : 'bg-neutral-50 border-[#ded7ca] focus:border-[#d97706]'
                 }`}
               />
+              <p className="mt-1 text-[10px] text-neutral-400">{REGISTRATION_HINT}</p>
             </div>
             <div>
               <label className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1">

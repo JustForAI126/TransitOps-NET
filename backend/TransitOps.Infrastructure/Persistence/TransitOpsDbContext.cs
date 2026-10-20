@@ -99,8 +99,10 @@ public class TransitOpsDbContext : IdentityDbContext<ApplicationUser>
         modelBuilder.Entity<Vehicle>(entity =>
         {
             entity.HasKey(v => v.Id);
-            entity.HasIndex(v => v.RegistrationNumber).IsUnique()
-                .HasDatabaseName("IX_Vehicles_RegistrationNumber");
+            // Unique within an organization: another tenant may legitimately hold the same vehicle
+            // (e.g. after a sale), and a global check would reveal other tenants' fleets.
+            entity.HasIndex(v => new { v.TenantId, v.RegistrationNumber }).IsUnique()
+                .HasDatabaseName("IX_Vehicles_TenantId_RegistrationNumber");
             entity.Property(v => v.RegistrationNumber).HasMaxLength(32).IsRequired();
             entity.Property(v => v.AcquisitionCost).HasPrecision(18, 2);
             entity.Property(v => v.RevenueGenerated).HasPrecision(18, 2);
@@ -120,8 +122,10 @@ public class TransitOpsDbContext : IdentityDbContext<ApplicationUser>
             entity.HasKey(d => d.Id);
             entity.HasIndex(d => d.Email).IsUnique()
                 .HasDatabaseName("IX_Drivers_Email");
-            entity.HasIndex(d => d.LicenseNumber).IsUnique()
-                .HasDatabaseName("IX_Drivers_LicenseNumber");
+            // A driver may work for more than one organization; email stays global because
+            // Identity requires unique account emails.
+            entity.HasIndex(d => new { d.TenantId, d.LicenseNumber }).IsUnique()
+                .HasDatabaseName("IX_Drivers_TenantId_LicenseNumber");
             entity.HasIndex(d => d.IdentityUserId).IsUnique()
                 .HasDatabaseName("IX_Drivers_IdentityUserId");
             entity.Property(d => d.IdentityUserId).HasMaxLength(450);

@@ -15,6 +15,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { useTheme } from '../../context/ThemeContext';
 import { Driver } from '../../types';
+import { api, SafetyScoreBreakdown } from '../../services/api';
 
 export const SafetyOfficerDashboard: React.FC = () => {
   const {
@@ -22,6 +23,7 @@ export const SafetyOfficerDashboard: React.FC = () => {
     maintenanceRecords,
     toggleDriverSuspension,
     sendLicenseReminderEmail,
+    recordDriverIncident,
     exportToCSV,
   } = useApp();
   const { theme } = useTheme();
@@ -29,6 +31,30 @@ export const SafetyOfficerDashboard: React.FC = () => {
 
   const [complianceFilter, setComplianceFilter] = useState<'all' | 'expired' | 'expiring' | 'suspended' | 'compliant'>('all');
   const [driverSearch, setDriverSearch] = useState('');
+  const [scoreBreakdown, setScoreBreakdown] = useState<{ driverId: string; data: SafetyScoreBreakdown | null; error?: string } | null>(null);
+
+  const toggleScoreBreakdown = async (driverId: string) => {
+    if (scoreBreakdown?.driverId === driverId) {
+      setScoreBreakdown(null);
+      return;
+    }
+    setScoreBreakdown({ driverId, data: null });
+    try {
+      const data = await api.drivers.safetyScore(driverId);
+      setScoreBreakdown((current) => (current?.driverId === driverId ? { driverId, data } : current));
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Could not load the score breakdown.';
+      setScoreBreakdown((current) => (current?.driverId === driverId ? { driverId, data: null, error } : current));
+    }
+  };
+
+  const confirmIncident = async (driver: Driver) => {
+    if (!window.confirm(`Record a safety incident for ${driver.name}? This lowers their safety score.`)) return;
+    await recordDriverIncident(driver.id);
+    if (scoreBreakdown?.driverId === driver.id) {
+      setScoreBreakdown(null);
+    }
+  };
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -488,8 +514,8 @@ export const SafetyOfficerDashboard: React.FC = () => {
                 const isSuspended = d.status === 'Suspended';
 
                 return (
+                  <React.Fragment key={d.id}>
                   <tr
-                    key={d.id}
                     className={`transition-colors ${
                       isDark ? 'hover:bg-[#181d27]' : 'hover:bg-neutral-50'
                     }`}
@@ -527,7 +553,13 @@ export const SafetyOfficerDashboard: React.FC = () => {
                       </div>
                     </td>
                     <td className="py-3">
-                      <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => toggleScoreBreakdown(d.id)}
+                        title="Show how this score is calculated"
+                        aria-expanded={scoreBreakdown?.driverId === d.id}
+                        className="flex items-center gap-1.5 underline decoration-dotted underline-offset-2"
+                      >
                         <div
                           className={`w-2 h-2 rounded-full ${
                             d.safetyScore >= 90
@@ -538,7 +570,7 @@ export const SafetyOfficerDashboard: React.FC = () => {
                           }`}
                         />
                         <span className="font-mono font-bold">{d.safetyScore}/100</span>
-                      </div>
+                      </button>
                     </td>
                     <td className="py-3">
                       <span
@@ -564,6 +596,18 @@ export const SafetyOfficerDashboard: React.FC = () => {
                     </td>
                     <td className="py-3 text-right pr-2">
                       <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => confirmIncident(d)}
+                          title="Record Safety Incident"
+                          aria-label={`Record safety incident for ${d.name}`}
+                          className={`p-1.5 rounded-lg border transition-colors ${
+                            isDark
+                              ? 'bg-[#181d27] border-[#272e3d] hover:text-red-400 text-neutral-400'
+                              : 'bg-white border-[#ded7ca] hover:text-red-600 text-neutral-600'
+                          }`}
+                        >
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                        </button>
                         <button
                           onClick={() => sendLicenseReminderEmail(d.id)}
                           title="Send License Notice"
@@ -598,6 +642,38 @@ export const SafetyOfficerDashboard: React.FC = () => {
                       </div>
                     </td>
                   </tr>
+                  {scoreBreakdown?.driverId === d.id && (
+                    <tr>
+                      <td colSpan={7} className="pb-3 pl-2 pr-2">
+                        <div className={`rounded-xl border p-3 text-[11px] ${isDark ? 'bg-[#181d27] border-[#272e3d]' : 'bg-neutral-50 border-[#ded7ca]'}`}>
+                          {scoreBreakdown.error ? (
+                            <span className="text-red-400">{scoreBreakdown.error}</span>
+                          ) : !scoreBreakdown.data ? (
+                            <span className="text-neutral-400">Loading score breakdown…</span>
+                          ) : (
+                            <>
+                              <div className="font-bold mb-1.5">
+                                {scoreBreakdown.data.score}/100 · {scoreBreakdown.data.band}
+                                <span className="font-normal text-neutral-400"> — starts at 100</span>
+                              </div>
+                              <ul className="space-y-1">
+                                {scoreBreakdown.data.factors.map((f) => (
+                                  <li key={f.factor} className="flex gap-2">
+                                    <span className={`w-10 text-right font-mono font-bold ${f.points < 0 ? 'text-red-400' : f.points > 0 ? 'text-emerald-400' : 'text-neutral-400'}`}>
+                                      {f.points > 0 ? `+${f.points}` : f.points}
+                                    </span>
+                                    <span className="font-semibold w-28 shrink-0">{f.factor}</span>
+                                    <span className="text-neutral-400">{f.detail}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 );
               })}
             </tbody>

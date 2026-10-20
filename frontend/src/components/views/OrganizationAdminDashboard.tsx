@@ -4,6 +4,14 @@ import { api } from '../../services/api';
 import { useApp } from '../../context/AppContext';
 import { useTheme } from '../../context/ThemeContext';
 import { INDIAN_LICENSE_CATEGORIES, OrganizationUser, UserRole } from '../../types';
+import { licenceExpiryError, LICENCE_HINT, normalizeLicence } from '../../utils/indianFormats';
+
+/** Normalized licence number, or an error message for the form. */
+const checkDriverLicence = (licenseNumber: string, licenseExpiryDate: string): { licence: string; error: string | null } => {
+  const licence = normalizeLicence(licenseNumber);
+  if (!licence.ok) return { licence: '', error: licence.error };
+  return { licence: licence.value, error: licenceExpiryError(licence.value, licenseExpiryDate) };
+};
 
 type AssignableRole = Exclude<UserRole, 'organization_admin'>;
 type EditUserDraft = {
@@ -61,6 +69,11 @@ export const OrganizationAdminDashboard: React.FC = () => {
 
   const createUser = async (event: React.FormEvent) => {
     event.preventDefault();
+    const driverCheck = role === 'driver' ? checkDriverLicence(licenseNumber, licenseExpiryDate) : null;
+    if (driverCheck?.error) {
+      setError(driverCheck.error);
+      return;
+    }
     setIsSubmitting(true);
     setError(null);
     try {
@@ -69,8 +82,8 @@ export const OrganizationAdminDashboard: React.FC = () => {
         email,
         password,
         role,
-        ...(role === 'driver'
-          ? { contactNumber, licenseNumber, licenseCategory, licenseExpiryDate }
+        ...(driverCheck
+          ? { contactNumber, licenseNumber: driverCheck.licence, licenseCategory, licenseExpiryDate }
           : {}),
       });
       setFullName('');
@@ -91,6 +104,13 @@ export const OrganizationAdminDashboard: React.FC = () => {
   const editUser = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!editDraft) return;
+    const driverCheck = editDraft.role === 'driver'
+      ? checkDriverLicence(editDraft.licenseNumber, editDraft.licenseExpiryDate)
+      : null;
+    if (driverCheck?.error) {
+      setError(driverCheck.error);
+      return;
+    }
     setIsSubmitting(true);
     setError(null);
     try {
@@ -98,10 +118,10 @@ export const OrganizationAdminDashboard: React.FC = () => {
         fullName: editDraft.fullName,
         email: editDraft.email,
         role: editDraft.role,
-        ...(editDraft.role === 'driver'
+        ...(driverCheck
           ? {
               contactNumber: editDraft.contactNumber,
-              licenseNumber: editDraft.licenseNumber,
+              licenseNumber: driverCheck.licence,
               licenseCategory: editDraft.licenseCategory,
               licenseExpiryDate: editDraft.licenseExpiryDate,
             }
@@ -225,7 +245,7 @@ export const OrganizationAdminDashboard: React.FC = () => {
               </label>
               <label className="space-y-1 text-xs font-semibold">
                 License number
-                <input className={fieldClass} required maxLength={64} value={licenseNumber} onChange={(event) => { setError(null); setLicenseNumber(event.target.value.toUpperCase()); }} />
+                <input className={fieldClass} required maxLength={20} placeholder="MH14 20180045921" title={LICENCE_HINT} value={licenseNumber} onChange={(event) => { setError(null); setLicenseNumber(event.target.value.toUpperCase()); }} />
               </label>
               <label className="space-y-1 text-xs font-semibold">
                 License category
@@ -399,7 +419,9 @@ export const OrganizationAdminDashboard: React.FC = () => {
                     <input
                       className={fieldClass}
                       required
-                      maxLength={64}
+                      maxLength={20}
+                      placeholder="MH14 20180045921"
+                      title={LICENCE_HINT}
                       value={editDraft.licenseNumber}
                       onChange={event => setEditDraft({ ...editDraft, licenseNumber: event.target.value.toUpperCase() })}
                     />

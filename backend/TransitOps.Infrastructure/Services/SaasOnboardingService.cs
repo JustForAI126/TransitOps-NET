@@ -14,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TransitOps.Application.DTOs;
+using TransitOps.Application.Reports;
 using TransitOps.Application.Services;
 using TransitOps.Domain.Entities;
 using TransitOps.Domain.Enums;
@@ -33,6 +34,7 @@ public sealed class SaasOnboardingService : ISaasOnboardingService
     private readonly SmtpEmailOptions _emailOptions;
     private readonly PublicApplicationOptions _applicationOptions;
     private readonly ILogger<SaasOnboardingService> _logger;
+    private readonly IEmailSender _emailSender;
     private readonly string _verificationHashKey;
 
     public SaasOnboardingService(
@@ -44,8 +46,10 @@ public sealed class SaasOnboardingService : ISaasOnboardingService
         IOptions<SmtpEmailOptions> emailOptions,
         IOptions<PublicApplicationOptions> applicationOptions,
         IConfiguration configuration,
-        ILogger<SaasOnboardingService> logger)
+        ILogger<SaasOnboardingService> logger,
+        IEmailSender emailSender)
     {
+        _emailSender = emailSender;
         _db = db;
         _userManager = userManager;
         _httpClientFactory = httpClientFactory;
@@ -627,20 +631,37 @@ public sealed class SaasOnboardingService : ISaasOnboardingService
 
         if (purchase.ReceiptEmailSentAtUtc is null)
         {
-            var endsAt = await _db.OrganizationSubscriptions
-                .Where(subscription => subscription.RazorpayPaymentId == purchase.RazorpayPaymentId)
-                .Select(subscription => subscription.EndsAtUtc)
+            var subscription = await _db.OrganizationSubscriptions
+                .Where(candidate => candidate.RazorpayPaymentId == purchase.RazorpayPaymentId)
                 .SingleAsync(cancellationToken);
+            var receiptData = BuildReceiptData(purchase, subscription);
+            var receiptPdf = SubscriptionReceiptPdf.Generate(receiptData);
+            var amount = FormatRupees(purchase.AmountPaise!.Value);
             var receipt = $"""
-                TransitOps purchase receipt
+                Hi {purchase.FullName},
+
+                Thank you for subscribing to TransitOps. Your payment was successful.
+
+                Receipt no.: {receiptData.ReceiptNumber}
                 Organization: {purchase.OrganizationName}
-                Plan: {purchase.PlanName}
-                Amount paid: {FormatRupees(purchase.AmountPaise!.Value)}
-                Term: {purchase.TermMonths} month(s)
-                Active until: {endsAt:yyyy-MM-dd}
-                Payment reference: {purchase.RazorpayPaymentId}
+                Plan: {purchase.PlanName} ({purchase.TermMonths} month(s))
+                Amount paid: {amount}
+                Active until: {subscription.EndsAtUtc:dd MMM yyyy}
+                Payment ID: {purchase.RazorpayPaymentId}
+
+                Your PDF receipt is attached. A separate email contains the link to set up your administrator account.
+
+                - TransitOps
                 """;
-            if (await TrySendEmailAsync(purchase.Email, "TransitOps subscription payment receipt", receipt, cancellationToken))
+            var receiptHtml = BuildReceiptHtml(receiptData, amount);
+            var attachment = new EmailAttachment($"TransitOps-Receipt-{receiptData.ReceiptNumber}.pdf", receiptPdf, "application/pdf");
+            if (await TrySendEmailAsync(
+                purchase.Email,
+                $"Payment receipt {receiptData.ReceiptNumber} - TransitOps {purchase.PlanName} plan",
+                receipt,
+                cancellationToken,
+                receiptHtml,
+                attachment))
             {
                 purchase.ReceiptEmailSentAtUtc = DateTimeOffset.UtcNow;
                 await _db.SaveChangesAsync(cancellationToken);
@@ -737,52 +758,78 @@ public sealed class SaasOnboardingService : ISaasOnboardingService
         return client;
     }
 
-    private async Task<bool> TrySendEmailAsync(
+    private SubscriptionReceiptData BuildReceiptData(SaasPurchase purchase, OrganizationSubscription subscription)
+    {
+        var features = _onboardingOptions.Plans
+            .SingleOrDefault(plan => string.Equals(plan.Id, subscription.PlanId, StringComparison.Ordinal))
+            ?.Features ?? [];
+        return new SubscriptionReceiptData(
+            SubscriptionReceiptPdf.ReceiptNumberFor(purchase.Id, subscription.CreatedAtUtc),
+            subscription.CreatedAtUtc,
+            purchase.OrganizationName,
+            purchase.FullName,
+            purchase.Email,
+            subscription.PlanName,
+            features.ToArray(),
+            subscription.TermMonths,
+            subscription.StartsAtUtc,
+            subscription.EndsAtUtc,
+            subscription.AmountPaise,
+            subscription.Currency,
+            subscription.RazorpayOrderId,
+            subscription.RazorpayPaymentId,
+            _razorpayOptions.KeyId.StartsWith("rzp_test_", StringComparison.Ordinal),
+            _emailOptions.FromAddress);
+    }
+
+    private static string BuildReceiptHtml(SubscriptionReceiptData data, string amount)
+    {
+        static string E(string value) => WebUtility.HtmlEncode(value);
+        static string Row(string label, string value) =>
+            $"<tr><td style=\"padding:6px 0;color:#6b7280\">{E(label)}</td>" +
+            $"<td style=\"padding:6px 0;text-align:right;font-weight:600\">{E(value)}</td></tr>";
+        var testBanner = data.IsTestMode
+            ? "<p style=\"margin:0 0 16px;padding:8px 12px;background:#fef3c7;color:#b45309;border-radius:6px;font-size:13px\">" +
+              "Test Mode payment: no real money was charged.</p>"
+            : string.Empty;
+        var activeUntil = data.EndsAtUtc.ToString("dd MMM yyyy", CultureInfo.InvariantCulture);
+        return $$"""
+            <!doctype html>
+            <html><body style="margin:0;background:#f3f4f6;font-family:Segoe UI,Arial,sans-serif;color:#1f2430">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
+            <table role="presentation" width="100%" style="max-width:560px;background:#ffffff;border-radius:10px;border-top:4px solid #b45309" cellpadding="0" cellspacing="0">
+            <tr><td style="padding:24px 28px">
+              <div style="font-size:22px;font-weight:700;color:#b45309">TransitOps</div>
+              <h1 style="font-size:18px;margin:16px 0 4px">Payment successful</h1>
+              <p style="margin:0 0 16px;color:#6b7280">Hi {{E(data.BillingName)}}, thank you for subscribing. Your PDF receipt is attached.</p>
+              {{testBanner}}
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb">
+                {{Row("Receipt no.", data.ReceiptNumber)}}
+                {{Row("Organization", data.OrganizationName)}}
+                {{Row("Plan", $"{data.PlanName} - {data.TermMonths} month(s)")}}
+                {{Row("Active until", activeUntil)}}
+                {{Row("Payment ID", data.RazorpayPaymentId)}}
+              </table>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px;font-size:16px">
+                <tr><td style="font-weight:700">Total paid</td><td style="text-align:right;font-weight:700;color:#b45309">{{E(amount)}}</td></tr>
+              </table>
+              <p style="margin:20px 0 0;font-size:12px;color:#6b7280">A separate email contains your administrator account setup link. Questions? Reply to this email and quote {{E(data.ReceiptNumber)}}.</p>
+            </td></tr></table>
+            </td></tr></table>
+            </body></html>
+            """;
+    }
+
+    private Task<bool> TrySendEmailAsync(
         string recipient,
         string subject,
         string body,
-        CancellationToken cancellationToken)
-    {
-        if (!IsEmailConfigured())
-            return false;
-        try
-        {
-            using var message = new MailMessage
-            {
-                From = new MailAddress(_emailOptions.FromAddress, _emailOptions.FromName),
-                Subject = subject,
-                Body = body,
-                IsBodyHtml = false
-            };
-            message.To.Add(new MailAddress(recipient));
-            using var smtp = new SmtpClient(_emailOptions.Host, _emailOptions.Port)
-            {
-                EnableSsl = _emailOptions.EnableSsl,
-                DeliveryMethod = SmtpDeliveryMethod.Network,
-                UseDefaultCredentials = false,
-                Credentials = new NetworkCredential(_emailOptions.UserName, _emailOptions.Password)
-            };
-            await smtp.SendMailAsync(message, cancellationToken);
-            return true;
-        }
-        catch (SmtpException exception)
-        {
-            _logger.LogError(exception, "Could not deliver an onboarding email.");
-            return false;
-        }
-        catch (FormatException exception)
-        {
-            _logger.LogError(exception, "Onboarding email sender configuration is invalid.");
-            return false;
-        }
-    }
+        CancellationToken cancellationToken,
+        string? htmlBody = null,
+        params EmailAttachment[] attachments) =>
+        _emailSender.TrySendAsync(recipient, subject, body, htmlBody, attachments, cancellationToken);
 
-    private bool IsEmailConfigured() =>
-        !string.IsNullOrWhiteSpace(_emailOptions.Host) &&
-        _emailOptions.Port is > 0 and <= 65535 &&
-        !string.IsNullOrWhiteSpace(_emailOptions.FromAddress) &&
-        !string.IsNullOrWhiteSpace(_emailOptions.UserName) &&
-        !string.IsNullOrWhiteSpace(_emailOptions.Password);
+    private bool IsEmailConfigured() => _emailSender.IsConfigured;
 
     private void EnsureEmailConfigured()
     {
@@ -834,8 +881,7 @@ public sealed class SaasOnboardingService : ISaasOnboardingService
         }
     }
 
-    private static string FormatRupees(long amountPaise) =>
-        $"INR {amountPaise / 100m:N2}";
+    private static string FormatRupees(long amountPaise) => SubscriptionReceiptPdf.FormatAmount(amountPaise);
 
     private sealed record RazorpayOrder(string Id, long Amount, string Currency);
     private sealed record RazorpayPayment(

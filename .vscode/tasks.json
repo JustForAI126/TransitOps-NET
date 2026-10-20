@@ -1,0 +1,28 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build API",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["build", "${workspaceFolder}/backend/TransitOps.Api/TransitOps.Api.csproj", "--nologo"],
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "test backend",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["test", "${workspaceFolder}/backend/TransitOps.sln", "--nologo"],
+      "group": "test",
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "type-check frontend",
+      "type": "npm",
+      "script": "lint",
+      "path": "frontend",
+      "problemMatcher": "$tsc"
+    }
+  ]
+}

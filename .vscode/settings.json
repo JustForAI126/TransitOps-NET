@@ -1,0 +1,13 @@
+{
+  "dotnet.defaultSolution": "backend/TransitOps.sln",
+  "files.exclude": {
+    "**/bin": true,
+    "**/obj": true,
+    "**/node_modules": true,
+    "tools/testdb/data": true
+  },
+  "search.exclude": {
+    "frontend/dist": true,
+    "docs/uml/uml-viewer.html": true
+  }
+}

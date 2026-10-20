@@ -24,14 +24,17 @@ public class TripsController : ControllerBase
     private readonly IValidator<CreateTripRequest> _createValidator;
     private readonly IValidator<CompleteTripRequest> _completeValidator;
     private readonly ISafetyScoreService _safety;
+    private readonly decimal _dieselPricePerLitre;
 
     public TripsController(
         TransitOpsDbContext db,
         IHubContext<TransitOpsHub, ITransitOpsClient> hub,
         IValidator<CreateTripRequest> createValidator,
         IValidator<CompleteTripRequest> completeValidator,
-        ISafetyScoreService safety)
+        ISafetyScoreService safety,
+        IConfiguration configuration)
     {
+        _dieselPricePerLitre = configuration.GetValue("Operations:DieselPricePerLitreInr", 96.5m);
         _db = db;
         _hub = hub;
         _createValidator = createValidator;
@@ -269,7 +272,7 @@ public class TripsController : ControllerBase
 
             if (req.FuelConsumedLiters > 0)
             {
-                decimal fuelCost = req.FuelConsumedLiters * 105m; // ₹105/L
+                var fuelCost = decimal.Round(req.FuelConsumedLiters * _dieselPricePerLitre, 2);
                 _db.Expenses.Add(new ExpenseRecord
                 {
                     TenantId = tenantId,

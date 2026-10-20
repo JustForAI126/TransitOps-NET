@@ -34,6 +34,7 @@ public sealed class SaasOnboardingService : ISaasOnboardingService
     private readonly SmtpEmailOptions _emailOptions;
     private readonly PublicApplicationOptions _applicationOptions;
     private readonly ILogger<SaasOnboardingService> _logger;
+    private readonly IEmailSender _emailSender;
     private readonly string _verificationHashKey;
 
     public SaasOnboardingService(
@@ -45,8 +46,10 @@ public sealed class SaasOnboardingService : ISaasOnboardingService
         IOptions<SmtpEmailOptions> emailOptions,
         IOptions<PublicApplicationOptions> applicationOptions,
         IConfiguration configuration,
-        ILogger<SaasOnboardingService> logger)
+        ILogger<SaasOnboardingService> logger,
+        IEmailSender emailSender)
     {
+        _emailSender = emailSender;
         _db = db;
         _userManager = userManager;
         _httpClientFactory = httpClientFactory;
@@ -817,60 +820,16 @@ public sealed class SaasOnboardingService : ISaasOnboardingService
             """;
     }
 
-    private sealed record EmailAttachment(string FileName, byte[] Content, string MediaType);
-
-    private async Task<bool> TrySendEmailAsync(
+    private Task<bool> TrySendEmailAsync(
         string recipient,
         string subject,
         string body,
         CancellationToken cancellationToken,
         string? htmlBody = null,
-        params EmailAttachment[] attachments)
-    {
-        if (!IsEmailConfigured())
-            return false;
-        try
-        {
-            using var message = new MailMessage
-            {
-                From = new MailAddress(_emailOptions.FromAddress, _emailOptions.FromName),
-                Subject = subject,
-                Body = body,
-                IsBodyHtml = false
-            };
-            if (htmlBody is not null)
-                message.AlternateViews.Add(AlternateView.CreateAlternateViewFromString(htmlBody, Encoding.UTF8, "text/html"));
-            foreach (var attachment in attachments)
-                message.Attachments.Add(new Attachment(new MemoryStream(attachment.Content), attachment.FileName, attachment.MediaType));
-            message.To.Add(new MailAddress(recipient));
-            using var smtp = new SmtpClient(_emailOptions.Host, _emailOptions.Port)
-            {
-                EnableSsl = _emailOptions.EnableSsl,
-                DeliveryMethod = SmtpDeliveryMethod.Network,
-                UseDefaultCredentials = false,
-                Credentials = new NetworkCredential(_emailOptions.UserName, _emailOptions.Password)
-            };
-            await smtp.SendMailAsync(message, cancellationToken);
-            return true;
-        }
-        catch (SmtpException exception)
-        {
-            _logger.LogError(exception, "Could not deliver an onboarding email.");
-            return false;
-        }
-        catch (FormatException exception)
-        {
-            _logger.LogError(exception, "Onboarding email sender configuration is invalid.");
-            return false;
-        }
-    }
+        params EmailAttachment[] attachments) =>
+        _emailSender.TrySendAsync(recipient, subject, body, htmlBody, attachments, cancellationToken);
 
-    private bool IsEmailConfigured() =>
-        !string.IsNullOrWhiteSpace(_emailOptions.Host) &&
-        _emailOptions.Port is > 0 and <= 65535 &&
-        !string.IsNullOrWhiteSpace(_emailOptions.FromAddress) &&
-        !string.IsNullOrWhiteSpace(_emailOptions.UserName) &&
-        !string.IsNullOrWhiteSpace(_emailOptions.Password);
+    private bool IsEmailConfigured() => _emailSender.IsConfigured;
 
     private void EnsureEmailConfigured()
     {

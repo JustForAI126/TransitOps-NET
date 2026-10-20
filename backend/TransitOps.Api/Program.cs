@@ -182,6 +182,7 @@ builder.Services.AddHttpClient("Razorpay", client =>
     client.Timeout = TimeSpan.FromSeconds(20);
 });
 builder.Services.AddScoped<ISaasOnboardingService, SaasOnboardingService>();
+builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 
 // 7. CORS
 builder.Services.AddCors(options =>
@@ -310,12 +311,12 @@ using (var scope = app.Services.CreateScope())
             ALTER TABLE "Drivers" ADD COLUMN IF NOT EXISTS "IdentityUserId" character varying(450);
             CREATE UNIQUE INDEX IF NOT EXISTS "IX_Drivers_IdentityUserId"
                 ON "Drivers" ("IdentityUserId");
-            CREATE UNIQUE INDEX IF NOT EXISTS "UX_Vehicles_NormalizedRegistrationNumber"
-                ON "Vehicles" (upper(btrim("RegistrationNumber")));
+            CREATE UNIQUE INDEX IF NOT EXISTS "UX_Vehicles_Tenant_NormalizedRegistrationNumber"
+                ON "Vehicles" ("TenantId", upper(btrim("RegistrationNumber")));
             CREATE UNIQUE INDEX IF NOT EXISTS "UX_Drivers_NormalizedEmail"
                 ON "Drivers" (upper(btrim("Email")));
-            CREATE UNIQUE INDEX IF NOT EXISTS "UX_Drivers_NormalizedLicenseNumber"
-                ON "Drivers" (upper(btrim("LicenseNumber")));
+            CREATE UNIQUE INDEX IF NOT EXISTS "UX_Drivers_Tenant_NormalizedLicenseNumber"
+                ON "Drivers" ("TenantId", upper(btrim("LicenseNumber")));
             CREATE UNIQUE INDEX IF NOT EXISTS "UX_Trips_OneDispatchedVehicle"
                 ON "Trips" ("VehicleId") WHERE "Status" = 'Dispatched';
             CREATE UNIQUE INDEX IF NOT EXISTS "UX_Trips_OneDispatchedDriver"
@@ -404,7 +405,7 @@ using (var scope = app.Services.CreateScope())
 
         if (app.Environment.IsDevelopment())
         {
-            SeedDevelopmentDemoData(db);
+            SeedDevelopmentDemoData(db, app.Configuration.GetValue("Operations:DieselPricePerLitreInr", 96.5m));
 
             var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
             var demoAccounts = new[]
@@ -609,7 +610,7 @@ static void SyncDemoDriverSafetyProfiles(TransitOpsDbContext db)
     db.SaveChanges();
 }
 
-static void SeedDevelopmentDemoData(TransitOpsDbContext db)
+static void SeedDevelopmentDemoData(TransitOpsDbContext db, decimal dieselPricePerLitre)
 {
     const string tenantId = "demo_tenant";
     var now = DateTime.UtcNow;
@@ -803,7 +804,7 @@ static void SeedDevelopmentDemoData(TransitOpsDbContext db)
                     VehicleId = trip.VehicleId,
                     TripId = trip.Id,
                     Type = ExpenseType.Fuel,
-                    Amount = decimal.Round(liters * 96.5m, 2),
+                    Amount = decimal.Round(liters * dieselPricePerLitre, 2),
                     Liters = liters,
                     OdometerReading = trip.FinalOdometerKm,
                     ExpenseDate = trip.CompletedAtUtc!.Value,

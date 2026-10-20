@@ -46,7 +46,7 @@ The Safety Officer can update driver details and status, send license reminders,
 - The frontend does not store bearer tokens in local storage. Authentication uses an HttpOnly JWT cookie.
 - Fleet Manager and Financial Analyst are the only roles whose vehicle and trip responses include financial fields. The vehicle UI also hides financial detail and financial export columns from other roles.
 - PostgreSQL credentials remain server-side. The RLS scripts intentionally enable RLS without creating permissive public policies; they are not a substitute for the API tenant filters.
-- Vehicle registration numbers and driver email/license numbers are normalized before saving and have unique database indexes. The current uniqueness scope is global, not tenant-local.
+- Vehicle registration numbers and driver licence numbers are normalized before saving and are unique **within an organization** (tenant), so one organization cannot discover another's fleet through a duplicate error. Driver email stays globally unique because Identity account emails are global.
 - Retired vehicles remain in storage and historical records. Active trip or maintenance records prevent retirement.
 
 ## Fleet dashboard KPIs
@@ -85,9 +85,16 @@ No reporting-period filter is currently defined; financial totals cover all pers
 ## Remaining product decisions
 
 - Whether Financial Analysts may view more than aggregate maintenance costs.
-- Whether global uniqueness for vehicle registrations and driver email/license values is intended, or should be tenant-local.
 - Whether dashboard financial totals need a reporting period, and what date basis to use.
 - Whether vehicle utilization should exclude vehicles under maintenance in addition to retired vehicles.
+
+## Fuel cost on trip completion
+
+Completing a trip records a Fuel expense of `litres × Operations:DieselPricePerLitreInr` (default ₹96.50, set in `appsettings.json`). The development seed uses the same setting.
+
+## Licence reminders
+
+`POST /drivers/{id}/send-license-reminder` emails the driver through SMTP with the licence number, expiry status and a link to the Parivahan Sarathi portal. Drivers in the seeded demo tenant are never emailed, because their addresses are made up; the endpoint returns a message saying so.
 
 ## Driver safety score
 

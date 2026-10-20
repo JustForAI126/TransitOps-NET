@@ -1,4 +1,5 @@
 using FluentValidation;
+using System.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.Mvc;
@@ -24,14 +25,20 @@ public class DriversController : ControllerBase
     private readonly ILogger<DriversController> _logger;
     private readonly IHubContext<TransitOpsHub, ITransitOpsClient> _hub;
     private readonly ISafetyScoreService _safety;
+    private readonly IEmailSender _email;
+
+    // Seeded demo drivers use made-up addresses on a domain we do not own; never email them.
+    private const string DemoTenantId = "demo_tenant";
 
     public DriversController(
         TransitOpsDbContext db,
         IValidator<CreateDriverRequest> createValidator,
         ILogger<DriversController> logger,
         IHubContext<TransitOpsHub, ITransitOpsClient> hub,
-        ISafetyScoreService safety)
+        ISafetyScoreService safety,
+        IEmailSender email)
     {
+        _email = email;
         _db = db;
         _createValidator = createValidator;
         _logger = logger;
@@ -97,7 +104,8 @@ public class DriversController : ControllerBase
 
         var exists = await _db.Drivers.AnyAsync(
             d => d.Email.ToUpper() == email.ToUpper() ||
-                d.LicenseNumber.ToUpper().Replace("-", "").Replace(" ", "") == licenseNumber,
+                (d.TenantId == tenantId &&
+                    d.LicenseNumber.ToUpper().Replace("-", "").Replace(" ", "") == licenseNumber),
             cancellationToken);
         if (exists)
         {
@@ -173,7 +181,8 @@ public class DriversController : ControllerBase
             if (!IndianRegulatoryFormats.TryNormalizeLicence(request.LicenseNumber, out var licenseNumber, out var licenceError))
                 return BadRequest(new { message = licenceError });
             if (await _db.Drivers.AnyAsync(
-                d => d.Id != id && d.LicenseNumber.ToUpper().Replace("-", "").Replace(" ", "") == licenseNumber,
+                d => d.Id != id && d.TenantId == tenantId &&
+                    d.LicenseNumber.ToUpper().Replace("-", "").Replace(" ", "") == licenseNumber,
                 cancellationToken))
                 return Conflict(new { message = "A driver with this license number already exists." });
             driver.LicenseNumber = licenseNumber;
@@ -262,7 +271,44 @@ public class DriversController : ControllerBase
             cancellationToken);
         if (driver == null) return NotFound();
 
-        return Accepted(new { message = $"License reminder queued for {driver.Email}." });
+        if (tenantId == DemoTenantId)
+            return Ok(new { message = $"Demo driver: reminder for {driver.Name} was not emailed because demo addresses are not real mailboxes." });
+        if (!_email.IsConfigured)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                new { message = "Email delivery is not configured, so the reminder could not be sent." });
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var daysLeft = driver.LicenseExpiryDate.DayNumber - today.DayNumber;
+        var status = daysLeft < 0
+            ? $"expired on {driver.LicenseExpiryDate:dd MMM yyyy} ({-daysLeft} days ago). You cannot be assigned trips until it is renewed"
+            : $"expires on {driver.LicenseExpiryDate:dd MMM yyyy} ({daysLeft} days from today)";
+        var text = $"""
+            Dear {driver.Name},
+
+            Your driving licence {driver.LicenseNumber} ({driver.LicenseCategory}) {status}.
+
+            Please renew it through the Parivahan Sarathi portal (https://sarathi.parivahan.gov.in) or your RTO,
+            and share the renewed licence with your fleet's Safety Officer so your record can be updated.
+
+            - TransitOps compliance team
+            """;
+        var html = $"""
+            <div style="font-family:Segoe UI,Arial,sans-serif;color:#1f2430;max-width:560px">
+              <h2 style="color:#b45309;margin:0 0 12px">Driving licence renewal reminder</h2>
+              <p>Dear {WebUtility.HtmlEncode(driver.Name)},</p>
+              <p>Your driving licence <b>{WebUtility.HtmlEncode(driver.LicenseNumber)}</b> ({WebUtility.HtmlEncode(driver.LicenseCategory)}) <b>{WebUtility.HtmlEncode(status)}</b>.</p>
+              <p>Please renew it through the <a href="https://sarathi.parivahan.gov.in">Parivahan Sarathi portal</a> or your RTO,
+                 and share the renewed licence with your fleet's Safety Officer so your record can be updated.</p>
+              <p style="color:#6b7280;font-size:12px">TransitOps compliance team</p>
+            </div>
+            """;
+        var subject = daysLeft < 0 ? "Action required: your driving licence has expired" : "Reminder: your driving licence expires soon";
+        if (!await _email.TrySendAsync(driver.Email, subject, text, html, cancellationToken: cancellationToken))
+            return StatusCode(StatusCodes.Status502BadGateway,
+                new { message = "The reminder email could not be delivered. Try again later." });
+
+        _logger.LogInformation("Licence reminder emailed to driver {DriverId}", driver.Id);
+        return Ok(new { message = $"Licence reminder emailed to {driver.Email}." });
     }
 
     /// <summary>Score breakdown so Safety Officers can see why a driver has their score.</summary>

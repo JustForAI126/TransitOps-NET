@@ -105,7 +105,8 @@ public class VehiclesController : ControllerBase
         var compactRegistration = IndianRegulatoryFormats.CompactForComparison(registrationNumber);
 
         var exists = await _db.Vehicles.AnyAsync(
-            v => v.RegistrationNumber.ToUpper().Replace("-", "").Replace(" ", "") == compactRegistration,
+            v => v.TenantId == tenantId &&
+                v.RegistrationNumber.ToUpper().Replace("-", "").Replace(" ", "") == compactRegistration,
             cancellationToken);
         if (exists)
         {
@@ -178,7 +179,8 @@ public class VehiclesController : ControllerBase
                 return BadRequest(new { message = registrationError });
             var compactRegistration = IndianRegulatoryFormats.CompactForComparison(registrationNumber);
             if (await _db.Vehicles.AnyAsync(
-                v => v.Id != id && v.RegistrationNumber.ToUpper().Replace("-", "").Replace(" ", "") == compactRegistration,
+                v => v.Id != id && v.TenantId == tenantId &&
+                    v.RegistrationNumber.ToUpper().Replace("-", "").Replace(" ", "") == compactRegistration,
                 cancellationToken))
                 return Conflict(new { message = "A vehicle with this registration number already exists." });
             vehicle.RegistrationNumber = registrationNumber;

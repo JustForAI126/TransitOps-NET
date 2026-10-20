@@ -161,6 +161,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const userRole = currentUser?.role ?? 'driver';
 
   const [activeView, setActiveViewState] = useState<ActiveView>(viewFromPath);
+  // The page requested on load. App redirects to /login while the session is being checked,
+  // so read the original target from here when the session is restored.
+  const initialViewRef = useRef<ActiveView>(viewFromPath());
   const setActiveView = useCallback((view: ActiveView) => {
     setActiveViewState(view);
     const path = viewPaths[view];
@@ -264,9 +267,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           avatarUrl: profile.avatarUrl,
         };
         setCurrentUser(user);
-        const requestedView = viewFromPath();
+        // Stay on the page that was refreshed; App still restricts views by role.
+        const requestedView = initialViewRef.current;
         if (requestedView !== 'purchase' && requestedView !== 'setup_account') {
-          setActiveView(profile.role === 'organization_admin' ? 'organization_admin' : 'dashboard');
+          if (profile.role === 'organization_admin') {
+            setActiveView('organization_admin');
+          } else {
+            setActiveView(['hero', 'login', 'organization_admin'].includes(requestedView) ? 'dashboard' : requestedView);
+          }
         }
       })
       .catch((err) => {
@@ -542,6 +550,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const retireVehicle = async (id: string) => {
+    const vehicle = vehicles.find((v) => v.id === id);
+    if (!window.confirm(`Retire ${vehicle?.name ?? 'this vehicle'} (${vehicle?.registrationNumber ?? ''})? It can no longer be dispatched. Trip history is kept.`)) return;
     try {
       await api.vehicles.retire(id);
       setVehicles((prev) => prev.map((v) => (v.id === id ? { ...v, status: 'Retired' } : v)));
@@ -583,6 +593,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const toggleDriverSuspension = async (id: string) => {
+    const driver = drivers.find((d) => d.id === id);
+    if (driver?.status !== 'Suspended' &&
+        !window.confirm(`Suspend ${driver?.name ?? 'this driver'}? They cannot be assigned trips until reinstated.`)) return;
     try {
       const updated = await api.drivers.toggleSuspension(id);
       setDrivers((prev) => prev.map((d) => (d.id === id ? updated : d)));
@@ -690,6 +703,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const cancelTrip = async (tripId: string) => {
     const trip = trips.find((t) => t.id === tripId);
     if (!trip) return { success: false, error: 'Trip not found' };
+    if (!window.confirm(`Cancel trip ${trip.source} → ${trip.destination}? This cannot be undone.`)) {
+      return { success: false, error: 'Cancelled by user' };
+    }
 
     try {
       const updated = await api.trips.cancel(tripId);
@@ -749,6 +765,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteExpense = async (id: string) => {
+    if (!window.confirm('Delete this expense record? This cannot be undone.')) return;
     try {
       await api.expenses.delete(id);
       setExpenses((prev) => prev.filter((e) => e.id !== id));

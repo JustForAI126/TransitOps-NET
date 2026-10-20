@@ -7,9 +7,11 @@ using FluentValidation;
 using Hangfire;
 using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.OpenApi.Models;
@@ -268,6 +270,19 @@ builder.Services.AddSwaggerGen(c =>
 var app = builder.Build();
 
 // Configure Middleware Pipeline
+// Hosting platforms terminate HTTPS at a proxy. Without the forwarded headers the app would see
+// plain HTTP from one IP: auth cookies would lack the Secure flag and every user would share one
+// login rate-limit bucket.
+var forwardedHeaders = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+};
+if (app.Configuration.GetValue<bool>("ReverseProxy:TrustAllProxies"))
+{
+    forwardedHeaders.KnownIPNetworks.Clear();
+    forwardedHeaders.KnownProxies.Clear();
+}
+app.UseForwardedHeaders(forwardedHeaders);
 app.UseExceptionHandler();
 app.UseRouting();
 app.UseCors("TransitOpsFrontend");
@@ -304,7 +319,11 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var db = scope.ServiceProvider.GetRequiredService<TransitOpsDbContext>();
-        db.Database.EnsureCreated();
+        // EnsureCreated() skips everything when the database already has any table, and Hangfire
+        // creates its own tables first, so on a fresh database the app tables would never be made.
+        // Create them explicitly when the core table is missing; existing databases are untouched.
+        if (db.Database.SqlQueryRaw<bool>("""SELECT to_regclass('public."Vehicles"') IS NOT NULL AS "Value" """).Single() is false)
+            db.GetService<Microsoft.EntityFrameworkCore.Storage.IRelationalDatabaseCreator>().CreateTables();
         db.Database.Migrate();
 
         db.Database.ExecuteSqlRaw("""

@@ -28,3 +28,7 @@ Desktop.ini
 
 # ngrok
 ngrok.yml
+# Local test tooling output
+tools/testdb/data/
+tools/testdb/node_modules/
+tools/mailsink/messages/

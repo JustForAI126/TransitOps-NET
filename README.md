@@ -21,7 +21,9 @@ backend/                     ASP.NET Core solution (TransitOps.sln)
   TransitOps.Tests/          xUnit tests
 frontend/                    React app and the Express dev host (server.ts)
 database/                    Supabase row-level-security scripts
-docs/                        Setup guide, access & KPI rules, handoff guide, UML diagrams
+docs/                        Setup guide, access & KPI rules, handoff guide, UML diagrams, test report
+tests/api/                   End-to-end API checklist tests (Python, standard library only)
+tools/                       Portable test database, local mail catcher, test API launcher
 ```
 
 ## Quick start
@@ -39,6 +41,8 @@ Prerequisites: .NET SDK 10, Node.js 20+, and a PostgreSQL connection string (a S
    npm --prefix frontend run dev
    ```
 4. In Development the API seeds a demo organization. Sign in as `admin@`, `manager@`, `driver@`, `safety@` or `analyst@transitops.com` with your configured demo password.
+
+End-to-end API checks against a disposable local database are in [tests/api](tests/api/README.md); the latest results are in [docs/TEST_REPORT.md](docs/TEST_REPORT.md).
 
 Run the checks that CI runs:
 

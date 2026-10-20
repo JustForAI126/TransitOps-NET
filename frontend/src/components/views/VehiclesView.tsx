@@ -28,6 +28,7 @@ export const VehiclesView: React.FC<VehiclesViewProps> = ({
 }) => {
   const {
     vehicles,
+    maintenanceRecords,
     currentUser,
     calculateVehicleROI,
     updateVehicleStatus,
@@ -443,7 +444,14 @@ export const VehiclesView: React.FC<VehiclesViewProps> = ({
                     <span>Send to Maintenance</span>
                   </button>
                 )}
-                {selectedVehicle.status === 'In Shop' && (
+                {selectedVehicle.status === 'In Shop' &&
+                  maintenanceRecords.some((m) => m.vehicleId === selectedVehicle.id && m.status === 'Active') && (
+                  <span className="text-[11px] text-neutral-400">
+                    Close its maintenance work order to return it to service.
+                  </span>
+                )}
+                {selectedVehicle.status === 'In Shop' &&
+                  !maintenanceRecords.some((m) => m.vehicleId === selectedVehicle.id && m.status === 'Active') && (
                   <button
                     onClick={() => updateVehicleStatus(selectedVehicle.id, 'Available')}
                     className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 transition-colors"

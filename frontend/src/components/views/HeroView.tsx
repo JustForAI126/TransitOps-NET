@@ -929,7 +929,7 @@ export const HeroView: React.FC = () => {
               SUBSCRIPTION PLANS
             </div>
             <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Choose the right plan for your fleet</h2>
-            <p className="mt-3 text-sm leading-relaxed text-neutral-500 dark:text-neutral-400">
+            <p className="mt-3 text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
               Clear, fixed-term pricing for your organization. Verify your email before checkout; payments are processed securely by Razorpay.
             </p>
           </div>
@@ -941,7 +941,7 @@ export const HeroView: React.FC = () => {
           )}
 
           {plansLoading ? (
-            <p role="status" className="text-center text-sm text-neutral-500">Loading subscription plans…</p>
+            <p role="status" className="text-center text-sm text-neutral-600 dark:text-neutral-400">Loading subscription plans…</p>
           ) : plans.length > 0 ? (
             <div className="grid gap-5 md:grid-cols-3">
               {plans.map(plan => (
@@ -956,16 +956,16 @@ export const HeroView: React.FC = () => {
                 >
                   <div className="mb-5">
                     <h3 className="text-lg font-extrabold">{plan.name}</h3>
-                    <p className="mt-1 text-xs text-neutral-500">Fleet operations subscription</p>
+                    <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">Fleet operations subscription</p>
                   </div>
                   <div className="mb-1 flex items-baseline gap-2">
                     <span className="text-3xl font-black tracking-tight">{formatPlanPrice(plan)}</span>
                   </div>
-                  <p className="text-xs text-neutral-500">
+                  <p className="text-xs text-neutral-600 dark:text-neutral-400">
                     one-time payment for {plan.termMonths} {plan.termMonths === 1 ? 'month' : 'months'}
                   </p>
                   <div className="my-5 h-px bg-neutral-500/15" />
-                  <ul className="mb-6 flex-1 space-y-3 text-sm text-neutral-600 dark:text-neutral-300">
+                  <ul className="mb-6 flex-1 space-y-3 text-sm text-neutral-700 dark:text-neutral-300">
                     {plan.features.map(feature => (
                       <li key={feature} className="flex items-start gap-2.5">
                         <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
@@ -989,10 +989,10 @@ export const HeroView: React.FC = () => {
               ))}
             </div>
           ) : (
-            !plansError && <p className="text-center text-sm text-neutral-500">No subscription plans are currently available.</p>
+            !plansError && <p className="text-center text-sm text-neutral-600 dark:text-neutral-400">No subscription plans are currently available.</p>
           )}
 
-          <p className="mt-6 text-center text-xs text-neutral-500">
+          <p className="mt-6 text-center text-xs text-neutral-600 dark:text-neutral-400">
             One-time payment, no automatic renewal. Razorpay checkout is currently configured for Test Mode.
           </p>
         </div>

@@ -7,9 +7,11 @@ using FluentValidation;
 using Hangfire;
 using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.OpenApi.Models;
@@ -26,10 +28,13 @@ using TransitOps.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 var demoPassword = builder.Configuration["DemoAccounts:Password"];
-if (builder.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(demoPassword))
+// Demo organization, accounts and sample data: always in Development, and in a deployed
+// demonstration environment when DemoData:Enabled is true.
+var seedDemoData = builder.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("DemoData:Enabled");
+if (seedDemoData && string.IsNullOrWhiteSpace(demoPassword))
 {
     throw new InvalidOperationException(
-        "Development seeding requires DemoAccounts:Password. Configure it with .NET User Secrets for the TransitOps.Api project.");
+        "Demo seeding requires DemoAccounts:Password. Configure it with .NET User Secrets locally or as a host secret when deployed.");
 }
 
 // 1. PostgreSQL is required; never silently start with non-persistent storage.
@@ -268,7 +273,23 @@ builder.Services.AddSwaggerGen(c =>
 var app = builder.Build();
 
 // Configure Middleware Pipeline
+// Hosting platforms terminate HTTPS at a proxy. Without the forwarded headers the app would see
+// plain HTTP from one IP: auth cookies would lack the Secure flag and every user would share one
+// login rate-limit bucket.
+var forwardedHeaders = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+};
+if (app.Configuration.GetValue<bool>("ReverseProxy:TrustAllProxies"))
+{
+    forwardedHeaders.KnownIPNetworks.Clear();
+    forwardedHeaders.KnownProxies.Clear();
+}
+app.UseForwardedHeaders(forwardedHeaders);
 app.UseExceptionHandler();
+// The production image puts the built React app in wwwroot so the UI, API and SignalR share one origin.
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.UseRouting();
 app.UseCors("TransitOpsFrontend");
 app.UseRateLimiter();
@@ -297,6 +318,11 @@ if (app.Environment.IsDevelopment())
 
 app.MapControllers();
 app.MapHub<TransitOpsHub>("/hubs/transitops");
+if (app.Environment.WebRootPath is { } webRoot && File.Exists(Path.Combine(webRoot, "index.html")))
+{
+    // Client-side routes such as /vehicles load the SPA; unknown /api paths still return 404.
+    app.MapFallbackToFile("{*path:regex(^(?!api/|hubs/|swagger).*$)}", "index.html").AllowAnonymous();
+}
 
 // Initialize the PostgreSQL schema and idempotent Development demo tenant.
 using (var scope = app.Services.CreateScope())
@@ -304,7 +330,11 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var db = scope.ServiceProvider.GetRequiredService<TransitOpsDbContext>();
-        db.Database.EnsureCreated();
+        // EnsureCreated() skips everything when the database already has any table, and Hangfire
+        // creates its own tables first, so on a fresh database the app tables would never be made.
+        // Create them explicitly when the core table is missing; existing databases are untouched.
+        if (db.Database.SqlQueryRaw<bool>("""SELECT to_regclass('public."Vehicles"') IS NOT NULL AS "Value" """).Single() is false)
+            db.GetService<Microsoft.EntityFrameworkCore.Storage.IRelationalDatabaseCreator>().CreateTables();
         db.Database.Migrate();
 
         db.Database.ExecuteSqlRaw("""
@@ -323,7 +353,7 @@ using (var scope = app.Services.CreateScope())
                 ON "Trips" ("DriverId") WHERE "Status" = 'Dispatched';
             """);
 
-        if (app.Environment.IsDevelopment() &&
+        if (seedDemoData &&
             !db.Vehicles.Any(vehicle => vehicle.TenantId == "demo_tenant"))
         {
             var v1 = new Vehicle
@@ -403,7 +433,7 @@ using (var scope = app.Services.CreateScope())
             db.SaveChanges();
         }
 
-        if (app.Environment.IsDevelopment())
+        if (seedDemoData)
         {
             SeedDevelopmentDemoData(db, app.Configuration.GetValue("Operations:DieselPricePerLitreInr", 96.5m));
 

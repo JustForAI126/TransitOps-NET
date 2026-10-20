@@ -1,0 +1,46 @@
+# Render Blueprint: New → Blueprint → pick this repository. Values marked sync: false are
+# asked for once in the Render dashboard and stored as secrets; never commit them here.
+services:
+  - type: web
+    name: transitops
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/onboarding/plans
+    autoDeploy: true
+    envVars:
+      # Supabase → Connect → Session pooler connection string (works over IPv4)
+      - key: ConnectionStrings__DefaultConnection
+        sync: false
+      - key: Jwt__Key
+        generateValue: true
+      # Public URL of this service, e.g. https://transitops.onrender.com (used in emailed links)
+      - key: PublicApplication__BaseUrl
+        sync: false
+      - key: Cors__AllowedOrigins__0
+        sync: false
+      # Demo organization and the five demo logins, for presentations
+      - key: DemoData__Enabled
+        value: "true"
+      - key: DemoAccounts__Password
+        sync: false
+      # Razorpay Test Mode keys (the API only accepts rzp_test_ key IDs)
+      - key: Razorpay__KeyId
+        sync: false
+      - key: Razorpay__KeySecret
+        sync: false
+      - key: Razorpay__WebhookSecret
+        sync: false
+      # Gmail SMTP with an app password
+      - key: Email__Smtp__Host
+        value: smtp.gmail.com
+      - key: Email__Smtp__Port
+        value: "587"
+      - key: Email__Smtp__EnableSsl
+        value: "true"
+      - key: Email__Smtp__UserName
+        sync: false
+      - key: Email__Smtp__Password
+        sync: false
+      - key: Email__Smtp__FromAddress
+        sync: false

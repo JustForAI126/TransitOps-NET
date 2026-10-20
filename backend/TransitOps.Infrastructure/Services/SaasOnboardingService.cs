@@ -795,7 +795,8 @@ public sealed class SaasOnboardingService : ISaasOnboardingService
         var activeUntil = data.EndsAtUtc.ToString("dd MMM yyyy", CultureInfo.InvariantCulture);
         return $$"""
             <!doctype html>
-            <html><body style="margin:0;background:#f3f4f6;font-family:Segoe UI,Arial,sans-serif;color:#1f2430">
+            <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+            <body style="margin:0;background:#f3f4f6;font-family:Segoe UI,Arial,sans-serif;color:#1f2430">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
             <table role="presentation" width="100%" style="max-width:560px;background:#ffffff;border-radius:10px;border-top:4px solid #b45309" cellpadding="0" cellspacing="0">
             <tr><td style="padding:24px 28px">

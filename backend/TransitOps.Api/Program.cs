@@ -33,8 +33,15 @@ var demoPassword = builder.Configuration["DemoAccounts:Password"];
 var seedDemoData = builder.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("DemoData:Enabled");
 if (seedDemoData && string.IsNullOrWhiteSpace(demoPassword))
 {
+    // Say where the value was looked for, so a misconfigured editor or host is easy to diagnose.
+    var secretsPath = Microsoft.Extensions.Configuration.UserSecrets.PathHelper
+        .GetSecretsPathFromSecretsId("TransitOps.Api-LocalDevelopment");
+    var fromEnvironment = Environment.GetEnvironmentVariable("DemoAccounts__Password");
     throw new InvalidOperationException(
-        "Demo seeding requires DemoAccounts:Password. Configure it with .NET User Secrets locally or as a host secret when deployed.");
+        "Demo seeding requires DemoAccounts:Password. Configure it with .NET User Secrets locally or as a host secret when deployed. " +
+        $"Environment: {builder.Environment.EnvironmentName}; application: {builder.Environment.ApplicationName}; " +
+        $"User Secrets file: {secretsPath} (exists: {File.Exists(secretsPath)}); " +
+        $"DemoAccounts__Password environment variable: {(fromEnvironment is null ? "not set" : "set but empty")}.");
 }
 
 // 1. PostgreSQL is required; never silently start with non-persistent storage.

@@ -40,6 +40,7 @@ Prerequisites: .NET SDK 10, Node.js 20+, and a PostgreSQL connection string (a S
    npm --prefix frontend install
    npm --prefix frontend run dev
    ```
+   Or open the folder in VS Code and press **F5** with "TransitOps (API + frontend)" selected in Run and Debug (`Ctrl+Shift+D`); it builds the API, starts both and opens the browser.
 4. In Development the API seeds a demo organization. Sign in as `admin@`, `manager@`, `driver@`, `safety@` or `analyst@transitops.com` with your configured demo password.
 
 End-to-end API checks against a disposable local database are in [tests/api](tests/api/README.md); the latest results are in [docs/TEST_REPORT.md](docs/TEST_REPORT.md).

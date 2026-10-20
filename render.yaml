@@ -6,7 +6,7 @@ services:
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /api/onboarding/plans
+    healthCheckPath: /api/health
     autoDeploy: true
     envVars:
       # Supabase → Connect → Session pooler connection string (works over IPv4)

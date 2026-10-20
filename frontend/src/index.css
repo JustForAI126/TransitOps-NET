@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* dark: utilities follow the in-app theme toggle (ThemeContext adds .dark to <html>). */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer base {
   :root {
     --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;

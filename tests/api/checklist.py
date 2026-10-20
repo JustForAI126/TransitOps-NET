@@ -630,6 +630,8 @@ check("CORS does not allow arbitrary origins", h.get("Access-Control-Allow-Origi
 s, b, h = Session().call("OPTIONS", "/vehicles", headers={"Origin": "http://localhost:3000", "Access-Control-Request-Method": "GET"})
 check("CORS allows the configured frontend origin", h.get("Access-Control-Allow-Origin") == "http://localhost:3000", str(h.get("Access-Control-Allow-Origin")))
 check("Swagger document available in Development", root_get("/swagger/v1/swagger.json", Session()) == 200)
+check("Health endpoint responds for the hosting platform", Session().get("/health")[0] == 200)
+check("Viewing plans never uses up the purchase rate limit", all(Session().get("/onboarding/plans")[0] == 200 for _ in range(25)))
 s, b = fm.post("/vehicles", vehicle_body(status="Retired", id="00000000-0000-0000-0000-000000000009", tenantId="other"))
 check("Privileged fields in the body are ignored (status/id/tenant)", s == 201 and b["status"] == "Available" and b["id"] != "00000000-0000-0000-0000-000000000009")
 

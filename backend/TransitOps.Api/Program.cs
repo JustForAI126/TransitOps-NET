@@ -207,6 +207,7 @@ builder.Services.AddControllers()
     .AddJsonOptions(options =>
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddProblemDetails();
+builder.Services.AddHealthChecks();
 builder.Services.AddExceptionHandler<OnboardingExceptionHandler>();
 
 builder.Services.AddRateLimiter(options =>
@@ -318,6 +319,8 @@ if (app.Environment.IsDevelopment())
 
 app.MapControllers();
 app.MapHub<TransitOpsHub>("/hubs/transitops");
+// Liveness probe for the hosting platform; anonymous and outside every rate limit.
+app.MapHealthChecks("/api/health").AllowAnonymous().DisableRateLimiting();
 if (app.Environment.WebRootPath is { } webRoot && File.Exists(Path.Combine(webRoot, "index.html")))
 {
     // Client-side routes such as /vehicles load the SPA; unknown /api paths still return 404.

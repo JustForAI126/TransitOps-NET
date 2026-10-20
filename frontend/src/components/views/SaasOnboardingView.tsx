@@ -102,7 +102,7 @@ export const SaasOnboardingView: React.FC<{ initialMode: OnboardingMode }> = ({ 
     : 'border-[#ded7ca] bg-white text-neutral-900';
   const inputStyle = isDark
     ? 'border-[#303746] bg-[#0c0e12] text-neutral-100 placeholder:text-neutral-600'
-    : 'border-[#ded7ca] bg-white text-neutral-900 placeholder:text-neutral-400';
+    : 'border-[#ded7ca] bg-white text-neutral-900 placeholder:text-neutral-500';
   const primaryStyle = isDark
     ? 'bg-[#ccff00] text-black hover:bg-[#bbf000]'
     : 'bg-[#d97706] text-white hover:bg-[#b45309]';
@@ -334,7 +334,7 @@ export const SaasOnboardingView: React.FC<{ initialMode: OnboardingMode }> = ({ 
         </div>
         <div>
           <h1 className="text-2xl font-extrabold">Set up your organization</h1>
-          <p className="text-sm text-neutral-500">Verify your email, confirm your plan, then pay securely through Razorpay Checkout Test Mode.</p>
+          <p className="text-sm text-neutral-600 dark:text-neutral-400">Verify your email, confirm your plan, then pay securely through Razorpay Checkout Test Mode.</p>
         </div>
       </div>
 
@@ -360,7 +360,7 @@ export const SaasOnboardingView: React.FC<{ initialMode: OnboardingMode }> = ({ 
 
       {step === 'verify' && (
         <form onSubmit={verifyEmail} className="space-y-4">
-          <p className="text-sm text-neutral-500">Enter the six-digit code sent to <strong>{email}</strong>.</p>
+          <p className="text-sm text-neutral-600 dark:text-neutral-400">Enter the six-digit code sent to <strong>{email}</strong>.</p>
           <label className="block text-sm font-semibold">Verification code
             <input required inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={verificationCode}
               onChange={event => { setError(null); setVerificationCode(event.target.value.replace(/\D/g, '')); }}
@@ -370,10 +370,10 @@ export const SaasOnboardingView: React.FC<{ initialMode: OnboardingMode }> = ({ 
             {isSubmitting ? 'Verifying…' : 'Confirm email'}
           </button>
           <button type="button" disabled={isSubmitting || !purchase} onClick={() => void resendVerification()}
-            className="w-full py-2 text-sm font-semibold text-neutral-500 hover:text-current disabled:opacity-50">
+            className="w-full py-2 text-sm font-semibold text-neutral-600 dark:text-neutral-400 hover:text-current disabled:opacity-50">
             Resend verification code
           </button>
-          <button type="button" onClick={() => setStep('details')} className="w-full py-2 text-sm text-neutral-500 hover:text-current">Use different details</button>
+          <button type="button" onClick={() => setStep('details')} className="w-full py-2 text-sm text-neutral-600 dark:text-neutral-400 hover:text-current">Use different details</button>
         </form>
       )}
 
@@ -397,8 +397,8 @@ export const SaasOnboardingView: React.FC<{ initialMode: OnboardingMode }> = ({ 
             >
               <h2 className="text-lg font-extrabold">{plan.name}</h2>
               <p className="mt-2 text-2xl font-black">{formatPlanPrice(plan)}</p>
-              <p className="mt-1 text-xs font-medium text-neutral-500">One-time payment for {plan.termMonths} {plan.termMonths === 1 ? 'month' : 'months'}</p>
-              <ul className="my-5 flex-1 space-y-2 text-sm text-neutral-500">
+              <p className="mt-1 text-xs font-medium text-neutral-600 dark:text-neutral-400">One-time payment for {plan.termMonths} {plan.termMonths === 1 ? 'month' : 'months'}</p>
+              <ul className="my-5 flex-1 space-y-2 text-sm text-neutral-600 dark:text-neutral-400">
                 {plan.features.map(feature => <li key={feature} className="flex gap-2"><CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />{feature}</li>)}
               </ul>
               <button onClick={() => { setSelectedPlanId(plan.id); void startCheckout(plan); }} disabled={busyPlanId !== null || isSubmitting}
@@ -407,7 +407,7 @@ export const SaasOnboardingView: React.FC<{ initialMode: OnboardingMode }> = ({ 
               </button>
             </article>
           ))}
-          {plans.length === 0 && <p className="text-sm text-neutral-500">No subscription plans are currently available.</p>}
+          {plans.length === 0 && <p className="text-sm text-neutral-600 dark:text-neutral-400">No subscription plans are currently available.</p>}
         </div>
         </>
       )}
@@ -417,8 +417,8 @@ export const SaasOnboardingView: React.FC<{ initialMode: OnboardingMode }> = ({ 
           <div className={`rounded-xl border p-5 ${cardStyle}`}>
             <CheckCircle2 className="mb-2 h-8 w-8 text-emerald-500" />
             <h2 className="text-lg font-bold">Payment verified by TransitOps</h2>
-            <p className="mt-2 text-sm text-neutral-500">{paymentResult?.message ?? 'Your purchase is recorded.'}</p>
-            <p className="mt-3 text-xs text-neutral-500">We never send passwords by email. Use the separate, expiring setup link sent to your verified address.</p>
+            <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">{paymentResult?.message ?? 'Your purchase is recorded.'}</p>
+            <p className="mt-3 text-xs text-neutral-600 dark:text-neutral-400">We never send passwords by email. Use the separate, expiring setup link sent to your verified address.</p>
           </div>
           {pendingPayment && (
             <button disabled={isSubmitting} onClick={() => void verifyCheckoutPayment(pendingPayment)}
@@ -446,7 +446,7 @@ export const SaasOnboardingView: React.FC<{ initialMode: OnboardingMode }> = ({ 
         </div>
         <div>
           <h1 className="text-2xl font-extrabold">Create your admin password</h1>
-          <p className="text-sm text-neutral-500">Your setup link is single-use and expires 48 hours after issue.</p>
+          <p className="text-sm text-neutral-600 dark:text-neutral-400">Your setup link is single-use and expires 48 hours after issue.</p>
         </div>
       </div>
       <label className="block text-sm font-semibold">New password
@@ -455,7 +455,7 @@ export const SaasOnboardingView: React.FC<{ initialMode: OnboardingMode }> = ({ 
             onChange={event => setPassword(event.target.value)}
             className={`w-full rounded-xl border px-3 py-2.5 pr-11 text-sm outline-none ${inputStyle}`} />
           <button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword(value => !value)}
-            className="absolute inset-y-0 right-3 text-neutral-500">{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
+            className="absolute inset-y-0 right-3 text-neutral-600 dark:text-neutral-400">{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
         </div>
       </label>
       <label className="block text-sm font-semibold">Confirm password
@@ -463,7 +463,7 @@ export const SaasOnboardingView: React.FC<{ initialMode: OnboardingMode }> = ({ 
           onChange={event => setConfirmPassword(event.target.value)}
           className={`mt-1 w-full rounded-xl border px-3 py-2.5 text-sm outline-none ${inputStyle}`} />
       </label>
-      <p className="text-xs text-neutral-500">Use at least 10 characters, including uppercase, lowercase, a number, and a symbol.</p>
+      <p className="text-xs text-neutral-600 dark:text-neutral-400">Use at least 10 characters, including uppercase, lowercase, a number, and a symbol.</p>
       <button disabled={isSubmitting || !accountToken} className={`w-full rounded-xl px-4 py-3 text-sm font-bold disabled:opacity-50 ${primaryStyle}`}>
         {isSubmitting ? 'Creating account…' : 'Create admin account'}
       </button>
@@ -474,7 +474,7 @@ export const SaasOnboardingView: React.FC<{ initialMode: OnboardingMode }> = ({ 
     <div className={`min-h-full px-4 py-10 sm:px-8 ${isDark ? 'text-neutral-100' : 'text-neutral-900'}`}>
       <div className="mx-auto max-w-5xl">
         <button onClick={() => setActiveView(mode === 'setup' ? 'login' : 'hero')}
-          className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-neutral-500 hover:text-current">
+          className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-neutral-600 dark:text-neutral-400 hover:text-current">
           <ArrowLeft className="h-4 w-4" /> {mode === 'setup' ? 'Back to sign in' : 'Back to home'}
         </button>
         <section className={`rounded-2xl border p-5 shadow-xl sm:p-8 ${cardStyle}`}>

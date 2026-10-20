@@ -15,7 +15,9 @@ namespace TransitOps.Api.Controllers;
 public sealed class OnboardingController(ISaasOnboardingService onboardingService) : ControllerBase
 {
     /// <summary>Returns the server-authoritative subscription plan catalog.</summary>
+    /// <remarks>Read-only and loaded on every home/purchase page view, so it must not use up the purchase rate limit.</remarks>
     [HttpGet("plans")]
+    [DisableRateLimiting]
     [ProducesResponseType<IReadOnlyList<SubscriptionPlanResponse>>(StatusCodes.Status200OK)]
     public ActionResult<IReadOnlyList<SubscriptionPlanResponse>> GetPlans() =>
         Ok(onboardingService.GetPlans());

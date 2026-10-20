@@ -29,7 +29,7 @@ Start-Process powershell -ArgumentList "-NoExit", "-Command", "`$host.UI.RawUI.W
 Write-Host "Waiting for the API to start..."
 for ($i = 0; $i -lt 120; $i++) {
     try {
-        Invoke-WebRequest "http://localhost:3000/api/onboarding/plans" -UseBasicParsing -TimeoutSec 2 | Out-Null
+        Invoke-WebRequest "http://localhost:3000/api/health" -UseBasicParsing -TimeoutSec 2 | Out-Null
         break
     } catch { Start-Sleep -Seconds 2 }
 }

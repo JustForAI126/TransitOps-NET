@@ -32,3 +32,6 @@ ngrok.yml
 tools/testdb/data/
 tools/testdb/node_modules/
 tools/mailsink/messages/
+
+# Built React app copied in for production-like local runs
+backend/TransitOps.Api/wwwroot/

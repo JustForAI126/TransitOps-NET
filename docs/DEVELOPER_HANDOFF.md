@@ -143,7 +143,7 @@ Generated directories such as `node_modules/`, `dist/`, `.NET bin/obj/`, and `.g
 | Path | Responsibility |
 |---|---|
 | `backend/TransitOps.sln` | Groups all backend projects for build and IDE workflows. |
-| `backend/Dockerfile` | Multi-stage container build/publish and ASP.NET Core runtime image. |
+| `Dockerfile` (repository root) | Builds the React app and the API into one image; the API serves the SPA from `wwwroot`. See `docs/DEPLOYMENT.md`. |
 | `backend/TransitOps.Domain/TransitOps.Domain.csproj` | Domain project definition and target framework. |
 | `backend/TransitOps.Domain/Entities/Entities.cs` | Entity types for Identity users, vehicles, vehicle documents, drivers, trips, maintenance, and expenses. |
 | `backend/TransitOps.Domain/Enums/Enums.cs` | Authoritative backend enums for roles, statuses, vehicle types, and expense types. |

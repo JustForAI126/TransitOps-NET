@@ -32,7 +32,7 @@ To configure the API on the second developer's machine, use the existing User Se
 ```powershell
 $apiProject = "backend\TransitOps.Api\TransitOps.Api.csproj"
 dotnet user-secrets set "ConnectionStrings:DefaultConnection" "<development-database-connection-string>" --project $apiProject
-$jwtKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
+$keyBytes = New-Object byte[] 48; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($keyBytes); $jwtKey = [Convert]::ToBase64String($keyBytes)
 dotnet user-secrets set "Jwt:Key" $jwtKey --project $apiProject
 dotnet user-secrets set "DemoAccounts:Password" "<unique-strong-development-password>" --project $apiProject
 ```
@@ -52,7 +52,7 @@ The JWT signing key can be unique per developer; it does not need to match. The 
    ```powershell
    $apiProject = "backend\TransitOps.Api\TransitOps.Api.csproj"
    dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=transitops;Username=transitops_app;Password=<your-db-password>;SSL Mode=Prefer" --project $apiProject
-   $jwtKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
+   $keyBytes = New-Object byte[] 48; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($keyBytes); $jwtKey = [Convert]::ToBase64String($keyBytes)
    dotnet user-secrets set "Jwt:Key" $jwtKey --project $apiProject
    dotnet user-secrets set "DemoAccounts:Password" "<strong-development-password>" --project $apiProject
    dotnet user-secrets set "Razorpay:KeyId" "rzp_test_..." --project $apiProject

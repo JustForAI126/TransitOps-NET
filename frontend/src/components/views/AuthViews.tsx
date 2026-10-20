@@ -253,7 +253,7 @@ export const LoginView: React.FC = () => {
             {/* Quick-Demo Role Switcher buttons */}
             <div className="mt-6 pt-5 border-t border-inherit">
               <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block mb-2 text-center">
-                Development-only demo accounts — configure DemoAccounts:Password in the API's .NET User Secrets
+                Demo accounts: pick a role above and sign in with the demo password provided by your team
               </span>
               <div className="grid grid-cols-2 gap-2 text-[11px]">
                 <button

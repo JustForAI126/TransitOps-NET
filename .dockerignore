@@ -1,0 +1,14 @@
+**/bin/
+**/obj/
+**/node_modules/
+frontend/dist/
+backend/TransitOps.Api/wwwroot/
+**/.env
+**/.env.*
+!frontend/.env.example
+.git/
+.github/
+docs/
+tests/
+tools/
+**/*.log

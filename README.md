@@ -56,6 +56,7 @@ npm --prefix frontend run lint
 - [Setup guide](docs/SETUP_GUIDE.md): secrets, Supabase, Razorpay test mode, ngrok
 - [Access model and KPI definitions](docs/ACCESS_AND_KPI.md): permission matrix, KPI/ROI formulas, safety score, Indian licence and registration rules
 - [Developer handoff](docs/DEVELOPER_HANDOFF.md): file-by-file catalog and request flows
+- [Deployment](docs/DEPLOYMENT.md): one Docker service on Render with Supabase
 - [UML diagrams](docs/uml/README.md): open `docs/uml/uml-viewer.html` in a browser
 
 Never commit secrets: keep them in User Secrets locally and in the host's secret store in production.

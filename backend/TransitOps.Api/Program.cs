@@ -28,10 +28,13 @@ using TransitOps.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 var demoPassword = builder.Configuration["DemoAccounts:Password"];
-if (builder.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(demoPassword))
+// Demo organization, accounts and sample data: always in Development, and in a deployed
+// demonstration environment when DemoData:Enabled is true.
+var seedDemoData = builder.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("DemoData:Enabled");
+if (seedDemoData && string.IsNullOrWhiteSpace(demoPassword))
 {
     throw new InvalidOperationException(
-        "Development seeding requires DemoAccounts:Password. Configure it with .NET User Secrets for the TransitOps.Api project.");
+        "Demo seeding requires DemoAccounts:Password. Configure it with .NET User Secrets locally or as a host secret when deployed.");
 }
 
 // 1. PostgreSQL is required; never silently start with non-persistent storage.
@@ -284,6 +287,9 @@ if (app.Configuration.GetValue<bool>("ReverseProxy:TrustAllProxies"))
 }
 app.UseForwardedHeaders(forwardedHeaders);
 app.UseExceptionHandler();
+// The production image puts the built React app in wwwroot so the UI, API and SignalR share one origin.
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.UseRouting();
 app.UseCors("TransitOpsFrontend");
 app.UseRateLimiter();
@@ -312,6 +318,11 @@ if (app.Environment.IsDevelopment())
 
 app.MapControllers();
 app.MapHub<TransitOpsHub>("/hubs/transitops");
+if (app.Environment.WebRootPath is { } webRoot && File.Exists(Path.Combine(webRoot, "index.html")))
+{
+    // Client-side routes such as /vehicles load the SPA; unknown /api paths still return 404.
+    app.MapFallbackToFile("{*path:regex(^(?!api/|hubs/|swagger).*$)}", "index.html").AllowAnonymous();
+}
 
 // Initialize the PostgreSQL schema and idempotent Development demo tenant.
 using (var scope = app.Services.CreateScope())
@@ -342,7 +353,7 @@ using (var scope = app.Services.CreateScope())
                 ON "Trips" ("DriverId") WHERE "Status" = 'Dispatched';
             """);
 
-        if (app.Environment.IsDevelopment() &&
+        if (seedDemoData &&
             !db.Vehicles.Any(vehicle => vehicle.TenantId == "demo_tenant"))
         {
             var v1 = new Vehicle
@@ -422,7 +433,7 @@ using (var scope = app.Services.CreateScope())
             db.SaveChanges();
         }
 
-        if (app.Environment.IsDevelopment())
+        if (seedDemoData)
         {
             SeedDevelopmentDemoData(db, app.Configuration.GetValue("Operations:DieselPricePerLitreInr", 96.5m));
 

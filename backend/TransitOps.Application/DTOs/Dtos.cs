@@ -125,8 +125,7 @@ public record UpdateDriverRequest(
     string? LicenseNumber,
     string? LicenseCategory,
     DateOnly? LicenseExpiryDate,
-    DriverStatus? Status,
-    int? SafetyScore
+    DriverStatus? Status
 );
 
 public record CreateTripRequest(

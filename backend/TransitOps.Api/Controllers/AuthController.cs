@@ -15,7 +15,6 @@ namespace TransitOps.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[EnableRateLimiting("auth")]
 public sealed class AuthController : ControllerBase
 {
     private const string AccessCookieName = "transitops_access";
@@ -37,7 +36,9 @@ public sealed class AuthController : ControllerBase
         _loginValidator = loginValidator;
     }
 
+    // Only password attempts are rate limited; the session check (/me) runs on every page load.
     [AllowAnonymous]
+    [EnableRateLimiting("auth")]
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request, CancellationToken cancellationToken)
     {

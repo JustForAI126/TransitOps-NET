@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using TransitOps.Application.DTOs;
+using TransitOps.Application.Validators;
 using TransitOps.Domain.Entities;
 using TransitOps.Domain.Enums;
 using TransitOps.Api.Hubs;
@@ -100,10 +101,11 @@ public class VehiclesController : ControllerBase
         }
 
         var tenantId = GetTenantId();
-        var registrationNumber = req.RegistrationNumber.Trim().ToUpperInvariant();
+        IndianRegulatoryFormats.TryNormalizeRegistration(req.RegistrationNumber, out var registrationNumber, out _);
+        var compactRegistration = IndianRegulatoryFormats.CompactForComparison(registrationNumber);
 
         var exists = await _db.Vehicles.AnyAsync(
-            v => v.RegistrationNumber == registrationNumber,
+            v => v.RegistrationNumber.ToUpper().Replace("-", "").Replace(" ", "") == compactRegistration,
             cancellationToken);
         if (exists)
         {
@@ -172,11 +174,11 @@ public class VehiclesController : ControllerBase
 
         if (request.RegistrationNumber is not null)
         {
-            var registrationNumber = request.RegistrationNumber.Trim().ToUpperInvariant();
-            if (string.IsNullOrWhiteSpace(registrationNumber))
-                return BadRequest(new { message = "Registration number cannot be empty." });
+            if (!IndianRegulatoryFormats.TryNormalizeRegistration(request.RegistrationNumber, out var registrationNumber, out var registrationError))
+                return BadRequest(new { message = registrationError });
+            var compactRegistration = IndianRegulatoryFormats.CompactForComparison(registrationNumber);
             if (await _db.Vehicles.AnyAsync(
-                v => v.Id != id && v.RegistrationNumber.ToUpper() == registrationNumber,
+                v => v.Id != id && v.RegistrationNumber.ToUpper().Replace("-", "").Replace(" ", "") == compactRegistration,
                 cancellationToken))
                 return Conflict(new { message = "A vehicle with this registration number already exists." });
             vehicle.RegistrationNumber = registrationNumber;

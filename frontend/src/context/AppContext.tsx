@@ -103,6 +103,7 @@ interface AppContextType {
   updateDriver: (id: string, data: Partial<Driver>) => Promise<void>;
   toggleDriverSuspension: (id: string) => Promise<void>;
   sendLicenseReminderEmail: (driverId: string) => Promise<void>;
+  recordDriverIncident: (driverId: string) => Promise<void>;
 
   createTrip: (data: {
     source: string;
@@ -604,6 +605,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const recordDriverIncident = async (driverId: string) => {
+    try {
+      const updated = await api.drivers.recordIncident(driverId);
+      setDrivers((prev) => prev.map((d) => (d.id === driverId ? updated : d)));
+      addNotification('warning', 'Incident Recorded', `${updated.name}'s safety score is now ${updated.safetyScore}/100.`);
+    } catch (err: any) {
+      addNotification('error', 'Incident Not Recorded', err.message);
+    }
+  };
+
   const createTrip = async (data: {
     source: string;
     destination: string;
@@ -888,6 +899,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateDriver,
         toggleDriverSuspension,
         sendLicenseReminderEmail,
+        recordDriverIncident,
 
         createTrip,
         dispatchTrip,

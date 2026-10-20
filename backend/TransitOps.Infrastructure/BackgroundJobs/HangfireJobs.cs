@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using TransitOps.Application.Services;
 using TransitOps.Domain.Enums;
 using TransitOps.Infrastructure.Persistence;
 
@@ -10,17 +11,26 @@ public interface IHangfireJobs
     Task CheckExpiringLicensesAsync();
     Task AuditVehicleMaintenanceSchedulesAsync();
     Task ReconcilePendingTripsAsync();
+    Task RecalculateSafetyScoresAsync();
 }
 
 public class HangfireJobs : IHangfireJobs
 {
     private readonly TransitOpsDbContext _db;
     private readonly ILogger<HangfireJobs> _logger;
+    private readonly ISafetyScoreService _safety;
 
-    public HangfireJobs(TransitOpsDbContext db, ILogger<HangfireJobs> logger)
+    public HangfireJobs(TransitOpsDbContext db, ILogger<HangfireJobs> logger, ISafetyScoreService safety)
     {
         _db = db;
         _logger = logger;
+        _safety = safety;
+    }
+
+    public async Task RecalculateSafetyScoresAsync()
+    {
+        var changed = await _safety.RecalculateAllAsync();
+        _logger.LogInformation("Hangfire: Recalculated safety scores, {Count} driver(s) changed", changed);
     }
 
     public async Task CheckExpiringLicensesAsync()

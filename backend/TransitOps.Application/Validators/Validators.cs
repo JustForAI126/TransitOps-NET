@@ -36,9 +36,10 @@ public class CreateOrganizationUserValidator : AbstractValidator<CreateOrganizat
         When(x => x.Role == UserRole.Driver, () =>
         {
             RuleFor(x => x.ContactNumber).NotEmpty().Must(value => !string.IsNullOrWhiteSpace(value)).MaximumLength(32);
-            RuleFor(x => x.LicenseNumber).NotEmpty().Must(value => !string.IsNullOrWhiteSpace(value)).MaximumLength(64);
-            RuleFor(x => x.LicenseCategory).NotEmpty().Must(value => !string.IsNullOrWhiteSpace(value)).MaximumLength(64);
-            RuleFor(x => x.LicenseExpiryDate).NotNull();
+            RuleFor(x => x.LicenseNumber).NotEmpty().Custom(IndianRules.LicenceNumber);
+            RuleFor(x => x.LicenseCategory).NotEmpty().Custom(IndianRules.LicenceClasses);
+            RuleFor(x => x.LicenseExpiryDate).NotNull()
+                .Custom((expiry, context) => IndianRules.LicenceExpiry(context.InstanceToValidate.LicenseNumber, expiry, context));
         });
     }
 }
@@ -56,9 +57,10 @@ public class UpdateOrganizationUserValidator : AbstractValidator<UpdateOrganizat
         When(x => x.Role == UserRole.Driver, () =>
         {
             RuleFor(x => x.ContactNumber).NotEmpty().Must(value => !string.IsNullOrWhiteSpace(value)).MaximumLength(32);
-            RuleFor(x => x.LicenseNumber).NotEmpty().Must(value => !string.IsNullOrWhiteSpace(value)).MaximumLength(64);
-            RuleFor(x => x.LicenseCategory).NotEmpty().Must(value => !string.IsNullOrWhiteSpace(value)).MaximumLength(64);
-            RuleFor(x => x.LicenseExpiryDate).NotNull();
+            RuleFor(x => x.LicenseNumber).NotEmpty().Custom(IndianRules.LicenceNumber);
+            RuleFor(x => x.LicenseCategory).NotEmpty().Custom(IndianRules.LicenceClasses);
+            RuleFor(x => x.LicenseExpiryDate).NotNull()
+                .Custom((expiry, context) => IndianRules.LicenceExpiry(context.InstanceToValidate.LicenseNumber, expiry, context));
         });
     }
 }
@@ -69,8 +71,8 @@ public class CreateVehicleValidator : AbstractValidator<CreateVehicleRequest>
     {
         RuleFor(x => x.RegistrationNumber)
             .NotEmpty().WithMessage("Registration / License plate number is required.")
-            .Must(value => !string.IsNullOrWhiteSpace(value))
-            .MaximumLength(32).WithMessage("Registration number cannot exceed 32 characters.");
+            .MaximumLength(32).WithMessage("Registration number cannot exceed 32 characters.")
+            .Custom(IndianRules.RegistrationNumber);
 
         RuleFor(x => x.Name)
             .NotEmpty().Must(value => !string.IsNullOrWhiteSpace(value))
@@ -112,13 +114,12 @@ public class CreateDriverValidator : AbstractValidator<CreateDriverRequest>
             .EmailAddress().WithMessage("A valid email address must be provided.");
 
         RuleFor(x => x.LicenseNumber)
-            .NotEmpty().Must(value => !string.IsNullOrWhiteSpace(value))
-            .WithMessage("Commercial driver permit / license number is mandatory.")
-            .MaximumLength(64);
+            .NotEmpty().WithMessage("Commercial driver permit / license number is mandatory.")
+            .Custom(IndianRules.LicenceNumber);
 
         RuleFor(x => x.LicenseCategory)
-            .NotEmpty().Must(value => !string.IsNullOrWhiteSpace(value))
-            .MaximumLength(64);
+            .NotEmpty()
+            .Custom(IndianRules.LicenceClasses);
 
         RuleFor(x => x.ContactNumber)
             .NotEmpty()
@@ -128,7 +129,8 @@ public class CreateDriverValidator : AbstractValidator<CreateDriverRequest>
             .WithMessage("Contact number must be a valid international phone number.");
 
         RuleFor(x => x.LicenseExpiryDate)
-            .NotEmpty().WithMessage("License expiry date is required.");
+            .NotEmpty().WithMessage("License expiry date is required.")
+            .Custom((expiry, context) => IndianRules.LicenceExpiry(context.InstanceToValidate.LicenseNumber, expiry, context));
     }
 }
 
@@ -191,4 +193,52 @@ public class CreateExpenseValidator : AbstractValidator<CreateExpenseRequest>
         RuleFor(x => x.Amount)
             .GreaterThan(0).WithMessage("Expense amount must be greater than 0.");
     }
+}
+
+/// <summary>FluentValidation adapters for <see cref="IndianRegulatoryFormats"/>.</summary>
+public static class IndianRules
+{
+    /// <summary>Licences are issued for at most 20 years (non-transport) and usually 5 (transport).</summary>
+    public const int MaxLicenceValidityYears = 20;
+
+    public static void RegistrationNumber<T>(string? value, ValidationContext<T> context)
+    {
+        if (!string.IsNullOrWhiteSpace(value) &&
+            !IndianRegulatoryFormats.TryNormalizeRegistration(value, out _, out var error))
+            context.AddFailure(error);
+    }
+
+    public static void LicenceNumber<T>(string? value, ValidationContext<T> context)
+    {
+        if (!string.IsNullOrWhiteSpace(value) &&
+            !IndianRegulatoryFormats.TryNormalizeLicence(value, out _, out var error))
+            context.AddFailure(error);
+    }
+
+    public static void LicenceClasses<T>(string? value, ValidationContext<T> context)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return;
+        var invalid = SplitClasses(value).Where(c => !IndianRegulatoryFormats.LicenceClasses.Contains(c)).ToList();
+        if (invalid.Count > 0)
+            context.AddFailure(
+                $"Unknown licence class '{string.Join(", ", invalid)}'. Use classes such as LMV, LMV-TR, MGV, HMV, HGMV, HPMV or HTV.");
+    }
+
+    public static void LicenceExpiry<T>(string? licenceNumber, DateOnly? expiry, ValidationContext<T> context)
+    {
+        if (expiry is null) return;
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (expiry.Value > today.AddYears(MaxLicenceValidityYears))
+            context.AddFailure($"Licence expiry cannot be more than {MaxLicenceValidityYears} years in the future.");
+        var issueYear = IndianRegulatoryFormats.LicenceIssueYear(licenceNumber);
+        if (issueYear is not null && expiry.Value.Year < issueYear.Value)
+            context.AddFailure($"Licence expiry cannot be before its issue year ({issueYear}).");
+    }
+
+    /// <summary>Accepts one class or several separated by commas or slashes, e.g. "LMV, HGMV".</summary>
+    public static IEnumerable<string> SplitClasses(string value) =>
+        value.Split([',', '/', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(c => c.ToUpperInvariant());
+
+    public static string NormalizeClasses(string value) => string.Join(", ", SplitClasses(value).Distinct());
 }

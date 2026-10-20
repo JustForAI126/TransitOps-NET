@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { X, UserPlus, AlertCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useTheme } from '../../context/ThemeContext';
-import { DriverStatus, INDIAN_LICENSE_CATEGORIES } from '../../types';
+import { INDIAN_LICENSE_CATEGORIES } from '../../types';
+import { licenceExpiryError, LICENCE_HINT, normalizeLicence } from '../../utils/indianFormats';
 
 interface AddDriverModalProps {
   isOpen: boolean;
@@ -19,8 +20,6 @@ export const AddDriverModal: React.FC<AddDriverModalProps> = ({ isOpen, onClose 
   const [licenseCategory, setLicenseCategory] = useState<string>('HGMV');
   const [licenseExpiryDate, setLicenseExpiryDate] = useState('2028-06-30');
   const [contactNumber, setContactNumber] = useState('+91 98');
-  const [safetyScore, setSafetyScore] = useState<number>(95);
-  const [status, setStatus] = useState<DriverStatus>('Available');
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -30,18 +29,30 @@ export const AddDriverModal: React.FC<AddDriverModalProps> = ({ isOpen, onClose 
     e.preventDefault();
     setError(null);
 
+    const licence = normalizeLicence(licenseNumber);
+    if (!licence.ok) {
+      setError(licence.error);
+      return;
+    }
+    const expiryError = licenceExpiryError(licence.value, licenseExpiryDate);
+    if (expiryError) {
+      setError(expiryError);
+      return;
+    }
+
     const generatedEmail =
       email.trim() ||
       `${name.toLowerCase().replace(/\s+/g, '.')}@transitops.com`;
 
     const res = await addDriver({
       name: name.trim(),
-      licenseNumber: licenseNumber.trim().toUpperCase(),
+      licenseNumber: licence.value,
       licenseCategory,
       licenseExpiryDate,
       contactNumber: contactNumber.trim(),
-      safetyScore: Number(safetyScore),
-      status,
+      // New drivers start Available; the API calculates the safety score.
+      safetyScore: 100,
+      status: 'Available',
       email: generatedEmail,
     });
 
@@ -123,7 +134,8 @@ export const AddDriverModal: React.FC<AddDriverModalProps> = ({ isOpen, onClose 
               <input
                 type="text"
                 required
-                placeholder="e.g. MH-12-2024009182"
+                placeholder="e.g. MH14 20180045921"
+                maxLength={20}
                 value={licenseNumber}
                 onChange={(e) => { setError(null); setLicenseNumber(e.target.value.toUpperCase()); }}
                 className={`w-full px-3 py-2 text-xs font-mono font-semibold rounded-xl border outline-none ${
@@ -132,6 +144,7 @@ export const AddDriverModal: React.FC<AddDriverModalProps> = ({ isOpen, onClose 
                     : 'bg-neutral-50 border-[#ded7ca] focus:border-[#d97706]'
                 }`}
               />
+              <p className="mt-1 text-[10px] text-neutral-400">{LICENCE_HINT}</p>
             </div>
             <div>
               <label className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1">
@@ -172,25 +185,15 @@ export const AddDriverModal: React.FC<AddDriverModalProps> = ({ isOpen, onClose 
             </div>
             <div>
               <label className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1">
-                Safety Score (0 - 100)
+                Safety Score
               </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                required
-                value={safetyScore}
-                onChange={(e) => { setError(null); setSafetyScore(Number(e.target.value)); }}
-                className={`w-full px-3 py-2 text-xs font-semibold rounded-xl border outline-none ${
-                  isDark
-                    ? 'bg-[#191d26] border-[#272e3d] focus:border-[#ccff00]'
-                    : 'bg-neutral-50 border-[#ded7ca] focus:border-[#d97706]'
-                }`}
-              />
+              <p className="px-3 py-2 text-[11px] text-neutral-400 leading-snug">
+                Calculated automatically from incidents, licence validity, fuel discipline and experience.
+              </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
             <div>
               <label className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1">
                 Contact Number
@@ -207,24 +210,6 @@ export const AddDriverModal: React.FC<AddDriverModalProps> = ({ isOpen, onClose 
                     : 'bg-neutral-50 border-[#ded7ca] focus:border-[#d97706]'
                 }`}
               />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1">
-                Duty Status
-              </label>
-              <select
-                value={status}
-                onChange={(e) => { setError(null); setStatus(e.target.value as DriverStatus); }}
-                className={`w-full px-3 py-2 text-xs rounded-xl border outline-none font-medium cursor-pointer ${
-                  isDark
-                    ? 'bg-[#191d26] border-[#272e3d] focus:border-[#ccff00] text-neutral-200'
-                    : 'bg-neutral-50 border-[#ded7ca] focus:border-[#d97706] text-neutral-800'
-                }`}
-              >
-                <option value="Available">Available</option>
-                <option value="Off Duty">Off Duty</option>
-                <option value="Suspended">Suspended</option>
-              </select>
             </div>
           </div>
 

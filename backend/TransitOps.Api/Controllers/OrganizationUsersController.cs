@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TransitOps.Application.DTOs;
+using TransitOps.Application.Validators;
 using TransitOps.Domain.Entities;
 using TransitOps.Domain.Enums;
 using TransitOps.Infrastructure.Persistence;
@@ -140,8 +141,8 @@ public sealed class OrganizationUsersController : ControllerBase
                 Name = request.FullName.Trim(),
                 Email = email,
                 ContactNumber = request.ContactNumber!.Trim(),
-                LicenseNumber = request.LicenseNumber!.Trim().ToUpperInvariant(),
-                LicenseCategory = request.LicenseCategory!.Trim(),
+                LicenseNumber = NormalizeLicence(request.LicenseNumber),
+                LicenseCategory = IndianRules.NormalizeClasses(request.LicenseCategory!),
                 LicenseExpiryDate = request.LicenseExpiryDate!.Value,
                 SafetyScore = 100,
                 Status = DriverStatus.Available
@@ -242,8 +243,8 @@ public sealed class OrganizationUsersController : ControllerBase
             driver.Name = user.FullName;
             driver.Email = email;
             driver.ContactNumber = request.ContactNumber!.Trim();
-            driver.LicenseNumber = request.LicenseNumber!.Trim().ToUpperInvariant();
-            driver.LicenseCategory = request.LicenseCategory!.Trim();
+            driver.LicenseNumber = NormalizeLicence(request.LicenseNumber);
+            driver.LicenseCategory = IndianRules.NormalizeClasses(request.LicenseCategory!);
             driver.LicenseExpiryDate = request.LicenseExpiryDate!.Value;
             if (_db.Entry(driver).State == EntityState.Detached)
                 _db.Drivers.Add(driver);
@@ -384,4 +385,10 @@ public sealed class OrganizationUsersController : ControllerBase
         driver?.LicenseNumber,
         driver?.LicenseCategory,
         driver?.LicenseExpiryDate);
+
+    // The request validator has already rejected numbers that do not follow the Indian format.
+    private static string NormalizeLicence(string? value) =>
+        IndianRegulatoryFormats.TryNormalizeLicence(value, out var normalized, out _)
+            ? normalized
+            : value!.Trim().ToUpperInvariant();
 }

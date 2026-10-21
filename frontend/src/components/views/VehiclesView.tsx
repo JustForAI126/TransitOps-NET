@@ -5,16 +5,13 @@ import {
   Search,
   Wrench,
   CheckCircle2,
-  AlertTriangle,
   Download,
-  Fuel,
   Gauge,
-  IndianRupee,
   TrendingUp,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useTheme } from '../../context/ThemeContext';
-import { Vehicle, VehicleStatus, VehicleType } from '../../types';
+import { Vehicle, VehicleStatus } from '../../types';
 import { formatRupees } from '../../utils/currency';
 
 interface VehiclesViewProps {

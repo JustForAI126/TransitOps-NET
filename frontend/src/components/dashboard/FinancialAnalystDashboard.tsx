@@ -48,13 +48,11 @@ export const FinancialAnalystDashboard: React.FC = () => {
     void loadFinancialKpis();
   }, [loadFinancialKpis, trips, maintenanceRecords, expenses]);
 
-  const completedTrips = trips.filter((trip) => trip.status === 'Completed');
   const totalMaintenanceCost = financialKpis?.maintenanceSpend ?? 0;
   const totalFuelCost = financialKpis?.fuelSpend ?? 0;
   const totalOpex = financialKpis?.totalOpex ?? 0;
   const otherExpenses = totalOpex - totalMaintenanceCost - totalFuelCost;
   const totalRevenue = financialKpis?.grossRevenue ?? 0;
-  const netOperatingProfit = financialKpis?.netProfit ?? 0;
   const operatingMargin = financialKpis?.netMarginPercentage ?? 0;
   const costPerKm = (financialKpis?.costPerKm ?? 0).toFixed(2);
 

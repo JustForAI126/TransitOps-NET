@@ -6,7 +6,6 @@ import {
   MaintenanceRecord,
   FuelExpenseRecord,
   OrganizationUser,
-  UserAccount,
   UserRole,
 } from '../types';
 

@@ -1,16 +1,10 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
 import {
   Truck,
   ArrowRight,
-  ShieldCheck,
   CheckCircle2,
   Lock,
   Mail,
-  User,
-  Building2,
-  Route,
-  BarChart,
   Sun,
   Moon,
   Eye,

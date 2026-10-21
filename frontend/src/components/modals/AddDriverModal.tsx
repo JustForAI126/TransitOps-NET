@@ -20,7 +20,6 @@ export const AddDriverModal: React.FC<AddDriverModalProps> = ({ isOpen, onClose 
   const [licenseCategory, setLicenseCategory] = useState<string>('HGMV');
   const [licenseExpiryDate, setLicenseExpiryDate] = useState('2028-06-30');
   const [contactNumber, setContactNumber] = useState('+91 98');
-  const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
@@ -41,7 +40,6 @@ export const AddDriverModal: React.FC<AddDriverModalProps> = ({ isOpen, onClose 
     }
 
     const generatedEmail =
-      email.trim() ||
       `${name.toLowerCase().replace(/\s+/g, '.')}@transitops.com`;
 
     const res = await addDriver({

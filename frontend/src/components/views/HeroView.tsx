@@ -8,11 +8,9 @@ import {
   ArrowRight,
   Route,
   CheckCircle2,
-  AlertTriangle,
   FileSpreadsheet,
   Cpu,
   BarChart,
-  UserCheck,
   CreditCard,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';

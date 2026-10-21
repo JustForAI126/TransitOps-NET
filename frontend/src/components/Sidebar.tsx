@@ -14,12 +14,8 @@ import {
 import { useApp, ActiveView } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 
-interface SidebarProps {
-  onOpenNewTripModal?: () => void;
-}
-
-export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewTripModal }) => {
-  const { activeView, setActiveView, userRole, vehicles, drivers, trips, maintenanceRecords } = useApp();
+export const Sidebar: React.FC = () => {
+  const { activeView, setActiveView, userRole, vehicles, drivers, trips } = useApp();
   const { theme } = useTheme();
 
   const isDark = theme === 'dark';

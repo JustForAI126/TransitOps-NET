@@ -6,14 +6,8 @@ import {
   Download,
   IndianRupee,
   Trash2,
-  Calendar,
-  Truck,
   TrendingUp,
   Receipt,
-  FileText,
-  AlertCircle,
-  Filter,
-  CheckCircle2,
   X,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
@@ -69,16 +63,6 @@ export const ExpensesView: React.FC<ExpensesViewProps> = () => {
 
   const totalTollCost = expenses
     .filter((e) => e.type === 'Toll' || e.category === 'Toll')
-    .reduce((sum, e) => sum + (e.cost || e.amount || 0), 0);
-
-  const totalOtherCost = expenses
-    .filter(
-      (e) =>
-        e.type !== 'Fuel' &&
-        e.category !== 'Fuel' &&
-        e.type !== 'Toll' &&
-        e.category !== 'Toll'
-    )
     .reduce((sum, e) => sum + (e.cost || e.amount || 0), 0);
 
   const grandTotalCost = expenses.reduce(

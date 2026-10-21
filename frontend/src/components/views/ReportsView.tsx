@@ -3,19 +3,8 @@ import {
   BarChart3,
   TrendingUp,
   Download,
-  DollarSign,
   PieChart,
-  Percent,
-  CheckCircle2,
-  ArrowUpRight,
-  Truck,
-  FileSpreadsheet,
-  Layers,
   Search,
-  Fuel,
-  Wrench,
-  ShieldCheck,
-  AlertTriangle,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useTheme } from '../../context/ThemeContext';

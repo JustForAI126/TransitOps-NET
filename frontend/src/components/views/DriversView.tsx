@@ -7,7 +7,6 @@ import {
   ShieldAlert,
   AlertTriangle,
   Mail,
-  Phone,
   Download,
   Award,
 } from 'lucide-react';

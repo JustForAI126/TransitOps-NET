@@ -8,9 +8,6 @@ import {
   XCircle,
   Send,
   Download,
-  Fuel,
-  Gauge,
-  Weight,
   MapPin,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';

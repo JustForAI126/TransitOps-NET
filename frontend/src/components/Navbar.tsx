@@ -7,18 +7,16 @@ import {
   Bell,
   LogOut,
 } from 'lucide-react';
-import { useApp, ActiveView } from '../context/AppContext';
+import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 import { UserRole } from '../types';
 
 interface NavbarProps {
   onOpenNewTripModal?: () => void;
-  onOpenAddVehicleModal?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   onOpenNewTripModal,
-  onOpenAddVehicleModal,
 }) => {
   const {
     activeView,

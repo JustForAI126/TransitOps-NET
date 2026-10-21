@@ -1,12 +1,16 @@
-using System.Net;
-using System.Net.Mail;
-using System.Text;
+using MailKit.Net.Smtp;
+using MailKit.Security;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using MimeKit;
 using TransitOps.Application.Services;
 
 namespace TransitOps.Infrastructure.Services;
 
+/// <summary>
+/// Sends email through any SMTP server with MailKit. System.Net.Mail.SmtpClient is not used because it
+/// never authenticates with some providers (Brevo answers "5.7.0 Please authenticate first").
+/// </summary>
 public sealed class SmtpEmailSender : IEmailSender
 {
     private readonly SmtpEmailOptions _options;
@@ -39,37 +43,33 @@ public sealed class SmtpEmailSender : IEmailSender
             return false;
         try
         {
-            using var message = new MailMessage
-            {
-                From = new MailAddress(_options.FromAddress, _options.FromName),
-                Subject = subject,
-                Body = textBody,
-                IsBodyHtml = false
-            };
-            if (htmlBody is not null)
-                message.AlternateViews.Add(AlternateView.CreateAlternateViewFromString(htmlBody, Encoding.UTF8, "text/html"));
-            foreach (var attachment in attachments ?? [])
-                message.Attachments.Add(new Attachment(new MemoryStream(attachment.Content), attachment.FileName, attachment.MediaType));
-            message.To.Add(new MailAddress(recipient));
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress(_options.FromName, _options.FromAddress));
+            message.To.Add(MailboxAddress.Parse(recipient));
+            message.Subject = subject;
 
-            using var smtp = new SmtpClient(_options.Host, _options.Port)
-            {
-                EnableSsl = _options.EnableSsl,
-                DeliveryMethod = SmtpDeliveryMethod.Network,
-                UseDefaultCredentials = false,
-                Credentials = new NetworkCredential(_options.UserName, _options.Password)
-            };
-            await smtp.SendMailAsync(message, cancellationToken);
+            var body = new BodyBuilder { TextBody = textBody, HtmlBody = htmlBody };
+            foreach (var attachment in attachments ?? [])
+                body.Attachments.Add(attachment.FileName, attachment.Content, ContentType.Parse(attachment.MediaType));
+            message.Body = body.ToMessageBody();
+
+            using var smtp = new SmtpClient { Timeout = 30_000 };
+            // EnableSsl means TLS: implicit on port 465, STARTTLS elsewhere (587, 2525). Off only for local test servers.
+            var security = !_options.EnableSsl
+                ? SecureSocketOptions.None
+                : _options.Port == 465 ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls;
+            await smtp.ConnectAsync(_options.Host, _options.Port, security, cancellationToken);
+            if (smtp.Capabilities.HasFlag(SmtpCapabilities.Authentication))
+                await smtp.AuthenticateAsync(_options.UserName, _options.Password, cancellationToken);
+            await smtp.SendAsync(message, cancellationToken);
+            await smtp.DisconnectAsync(true, cancellationToken);
             return true;
         }
-        catch (SmtpException exception)
+        catch (Exception exception) when (exception is SmtpCommandException or SmtpProtocolException
+            or AuthenticationException or SslHandshakeException or IOException
+            or System.Net.Sockets.SocketException or ParseException or TimeoutException)
         {
-            _logger.LogError(exception, "Could not deliver an email.");
-            return false;
-        }
-        catch (FormatException exception)
-        {
-            _logger.LogError(exception, "Email sender or recipient address is invalid.");
+            _logger.LogError(exception, "Could not deliver an email via {Host}:{Port}.", _options.Host, _options.Port);
             return false;
         }
     }

@@ -4,16 +4,30 @@ namespace TransitOps.Api.Startup;
 /// Accepts either a key=value connection string or a postgres:// URI (as Supabase shows it) and
 /// returns Npgsql settings with TLS required unless the connection string says otherwise.
 /// </summary>
-internal static class PostgresConnectionString
+public static class PostgresConnectionString
 {
     public static Npgsql.NpgsqlConnectionStringBuilder Build(string value)
     {
+        // Values pasted into hosting dashboards often carry stray whitespace or the quotes from a JSON file.
+        value = value.Trim().Trim('"', '\'').Trim();
         var builder = new Npgsql.NpgsqlConnectionStringBuilder();
 
         if (!value.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) &&
             !value.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
         {
-            builder.ConnectionString = value;
+            try
+            {
+                builder.ConnectionString = value;
+            }
+            catch (ArgumentException exception)
+            {
+                // Never echo the value: it contains the database password.
+                throw new InvalidOperationException(
+                    "ConnectionStrings:DefaultConnection is not a valid PostgreSQL connection string. Use either " +
+                    "'Host=...;Port=5432;Database=postgres;Username=...;Password=...;SSL Mode=Require' or a " +
+                    "'postgresql://user:password@host:5432/postgres' URI, with nothing before or after it.",
+                    exception);
+            }
             if (!builder.ContainsKey("SSL Mode")) builder.SslMode = Npgsql.SslMode.Require;
             return builder;
         }

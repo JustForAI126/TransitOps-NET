@@ -18,7 +18,8 @@
         "pattern": "Now listening on: (https?://\\S+)",
         "uriFormat": "http://localhost:3000",
         "action": "openExternally"
-      }
+      },
+      "checkForDevCert": false
     },
     {
       "name": "Frontend (React)",

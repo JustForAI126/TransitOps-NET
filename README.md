@@ -54,6 +54,7 @@ npm --prefix frontend run lint
 
 ## Documentation
 
+- [Project guide](docs/PROJECT_GUIDE.md): the whole project explained module by module, with viva questions
 - [Setup guide](docs/SETUP_GUIDE.md): secrets, Supabase, Razorpay test mode, ngrok
 - [Access model and KPI definitions](docs/ACCESS_AND_KPI.md): permission matrix, KPI/ROI formulas, safety score, Indian licence and registration rules
 - [Developer handoff](docs/DEVELOPER_HANDOFF.md): file-by-file catalog and request flows

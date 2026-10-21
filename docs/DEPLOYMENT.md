@@ -15,6 +15,39 @@ Why one service instead of Vercel + a separate API: the login cookie is HttpOnly
 on `*.vercel.app` calling an API on another site turns it into a third-party cookie, which Safari and newer
 Chrome block. Vercel's proxy rewrites do not carry WebSockets, so SignalR would also degrade.
 
+## Our live deployment
+
+| | |
+|---|---|
+| Live site | https://transitops-s0vg.onrender.com |
+| Hosting | Render, free web service, region Singapore, Docker, branch `main` |
+| Created from | **Public Git Repository** (`https://github.com/JustForAI126/TransitOps-NET`), so no GitHub app approval was needed. Render does not redeploy on push: after merging to `main`, click **Manual Deploy → Deploy latest commit**. |
+| Database | The existing Supabase project (session pooler, Mumbai), shared with the development laptops |
+| Health check | `/api/health` |
+
+Environment variables set in Render (values are in Render, never in Git):
+
+| Variable | Value / note |
+|---|---|
+| `ConnectionStrings__DefaultConnection` | Key=value form with a smaller pool, so one laptop plus Render stay under the pooler's 15 connections: `Host=aws-0-ap-south-1.pooler.supabase.com;Port=5432;Database=postgres;Username=postgres.<project-ref>;Password=<db password>;SSL Mode=Require;Maximum Pool Size=6` |
+| `Jwt__Key` | At least 32 characters |
+| `DemoData__Enabled` | `true` |
+| `DemoAccounts__Password` | **The same value as `DemoAccounts:Password` in the laptops' User Secrets.** Every start resets the demo accounts to this password; different values on the laptop and on Render make them overwrite each other. |
+| `Razorpay__KeyId`, `Razorpay__KeySecret`, `Razorpay__WebhookSecret` | Razorpay Test Mode keys |
+| `Email__Smtp__*` | Not set yet: Render's free plan blocks Gmail's port 587. Use Brevo on port 2525 (section 2, step 3). |
+
+Rules for the shared database: run **at most one laptop** against Supabase while the live site is up, and try
+destructive experiments in the offline test mode (`Start TransitOps (test mode).cmd`), not on Supabase.
+
+### Problems we hit and how they were fixed
+
+| Log message | Cause | Fix |
+|---|---|---|
+| `Format of the initialization string does not conform to specification starting at index 0` | The connection string value had something before it (space, quote or the JSON key) | Paste only `Host=...` to `...Pool Size=6`. The app now trims spaces and quotes and explains the expected format. |
+| `Jwt:Key must contain at least 32 UTF-8 bytes` | `Jwt__Key` was empty or short | Set a 32+ character key |
+| `28P01: password authentication failed for user "postgres"` | A typo in the pasted connection string | Delete the variable and add it again by copy-paste |
+| Demo login fails on the live site | `DemoAccounts__Password` on Render differed from the laptop's | Use the same value in both places |
+
 ## 1. Database (Supabase)
 
 Use a **separate Supabase project for the deployed app**. Do not point the deployment at the database your

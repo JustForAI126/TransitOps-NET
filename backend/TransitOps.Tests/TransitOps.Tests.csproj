@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\TransitOps.Infrastructure\TransitOps.Infrastructure.csproj" />
+    <ProjectReference Include="..\TransitOps.Api\TransitOps.Api.csproj" />
   </ItemGroup>
 
 </Project>

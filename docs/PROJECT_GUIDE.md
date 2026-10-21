@@ -466,8 +466,41 @@ files, so the website, API and live updates share one address (no cross-site coo
 runs the container; **Supabase** hosts the database; **Brevo** sends email (Render's free plan blocks Gmail's
 port). Secrets (database password, keys) are stored as Render environment variables, never in GitHub.
 
-**Viva:** *Why Docker?* – The app runs the same on any machine/cloud. *Where are secrets kept?* – In .NET User
-Secrets locally and in the host's environment variables in production; never committed.
+**Live site:** https://transitops-s0vg.onrender.com (Render free plan, Singapore; database: the project's Supabase in Mumbai).
+
+**How a deployment happens:**
+
+1. Code is merged into `main` on GitHub (GitHub Actions has already built and tested it, including the Docker
+   image).
+2. On Render: **Manual Deploy → Deploy latest commit**. Render downloads the code and runs the `Dockerfile`:
+   - stage 1 (Node): `npm ci` and `npm run build` → the React files;
+   - stage 2 (.NET SDK): `dotnet restore` and `dotnet publish` → the API;
+   - stage 3 (small ASP.NET runtime image): copies the API and puts the React files in `wwwroot`.
+3. Render starts the container with the environment variables (database, JWT key, demo password, Razorpay).
+4. On startup the app connects to Supabase, applies migrations, seeds the demo organization and starts
+   Hangfire; Render checks `/api/health` and switches traffic to the new version.
+
+**Free-plan limits to mention honestly:** the service sleeps after 15 minutes without visitors (first visit
+then takes about a minute); Render's free plan blocks SMTP port 587, so email on the live site needs Brevo
+(port 2525) or a paid plan.
+
+**Viva questions**
+
+1. *Why Docker?* – The app runs the same on any machine or cloud; the image contains everything it needs.
+2. *Why one service instead of Vercel for the frontend?* – Same origin: the HttpOnly login cookie and the SignalR
+   WebSocket work without cross-site problems.
+3. *Where are secrets kept?* – .NET User Secrets on laptops, Render environment variables in production;
+   never in GitHub.
+4. *What is a health check?* – A URL (`/api/health`) the host calls to know the app started correctly before
+   sending users to it.
+5. *What is a multi-stage Docker build?* – Separate build images for Node and .NET, then a small final image
+   with only the published output, so the deployed image is smaller and safer.
+6. *What went wrong during deployment and how did you fix it?* – A badly pasted connection string, a JWT key
+   shorter than 32 characters, a typo in the database password, and different demo passwords on the laptop
+   and Render. Each was found from the Render logs and fixed in the environment variables; the app now gives a
+   clearer message for the connection-string case.
+7. *Why does the free plan sleep, and how do you handle it in a demo?* – To save resources; open the site a
+   few minutes early, or ping `/api/health` with a free uptime monitor.
 
 ---
 

@@ -109,7 +109,7 @@ whole app is one website on one address.
 | **PostgreSQL** | Relational database | Reliable, free, supports transactions and advanced indexes |
 | **Supabase** | Hosted PostgreSQL in the cloud (Mumbai) | No database server to manage; free tier |
 | **Razorpay (Test Mode)** | Indian payment gateway | Card/UPI/netbanking checkout; test mode moves no real money |
-| **Gmail SMTP / Brevo** | Email sending | Verification codes, receipts with PDF, licence reminders |
+| **MailKit + Gmail SMTP / Brevo** | Email sending library and mail servers | Verification codes, receipts with PDF, licence reminders. MailKit replaced .NET's old `SmtpClient`, which could not log in to Brevo |
 | **Git + GitHub** | Version control and code hosting | History of every change, teamwork |
 | **GitHub Actions (CI)** | Automatic checks on every push | Builds and tests backend, frontend and Docker image |
 | **Docker** | Packages the app into one container | Runs the same everywhere |

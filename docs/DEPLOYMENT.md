@@ -34,7 +34,7 @@ Environment variables set in Render (values are in Render, never in Git):
 | `DemoData__Enabled` | `true` |
 | `DemoAccounts__Password` | **The same value as `DemoAccounts:Password` in the laptops' User Secrets.** Every start resets the demo accounts to this password; different values on the laptop and on Render make them overwrite each other. |
 | `Razorpay__KeyId`, `Razorpay__KeySecret`, `Razorpay__WebhookSecret` | Razorpay Test Mode keys |
-| `Email__Smtp__*` | Not set yet: Render's free plan blocks Gmail's port 587. Use Brevo on port 2525 (section 2, step 3). |
+| `Email__Smtp__*` | Brevo: Host `smtp-relay.brevo.com`, Port `2525`, EnableSsl `true`, UserName = the Brevo SMTP login (`...@smtp-brevo.com`), Password = the Brevo SMTP key, FromAddress = a verified Brevo sender. Render's free plan blocks port 587, so Gmail cannot be used there. |
 
 Rules for the shared database: run **at most one laptop** against Supabase while the live site is up, and try
 destructive experiments in the offline test mode (`Start TransitOps (test mode).cmd`), not on Supabase.
@@ -47,6 +47,7 @@ destructive experiments in the offline test mode (`Start TransitOps (test mode).
 | `Jwt:Key must contain at least 32 UTF-8 bytes` | `Jwt__Key` was empty or short | Set a 32+ character key |
 | `28P01: password authentication failed for user "postgres"` | A typo in the pasted connection string | Delete the variable and add it again by copy-paste |
 | Demo login fails on the live site | `DemoAccounts__Password` on Render differed from the laptop's | Use the same value in both places |
+| `5.7.0 Please authenticate first` (no email arrives) | .NET's built-in `System.Net.Mail.SmtpClient` never logs in to Brevo | The app now sends email with MailKit, which authenticates correctly with Brevo and Gmail |
 
 ## 1. Database (Supabase)
 

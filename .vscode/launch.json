@@ -15,8 +15,8 @@
       "console": "integratedTerminal",
       "stopAtEntry": false,
       "serverReadyAction": {
-        "pattern": "Now listening on: (https?://\\S+)",
-        "uriFormat": "http://localhost:3000",
+        "pattern": "Now listening on: ()",
+        "uriFormat": "http://localhost:3000%s",
         "action": "openExternally"
       },
       "checkForDevCert": false

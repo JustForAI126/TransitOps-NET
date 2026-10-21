@@ -19,6 +19,8 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({ isOpen, onClos
   const [driverId, setDriverId] = useState('');
   const [cargoWeightKg, setCargoWeightKg] = useState<number>(450);
   const [plannedDistanceKm, setPlannedDistanceKm] = useState<number>(160);
+  // Freight revenue is suggested from the demo freight rate (₹38 per tonne-km) until the manager edits it.
+  const [revenueInput, setRevenueInput] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   if (!isOpen || (userRole !== 'fleet_manager' && userRole !== 'driver')) return null;
@@ -31,8 +33,11 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({ isOpen, onClos
   // Filter eligible drivers (Business Rule 3: Drivers with expired licenses or Suspended status cannot be assigned)
   const today = new Date().toISOString().split('T')[0];
   const eligibleDrivers = drivers.filter(
-    (d) => d.status === 'Available' && d.licenseExpiryDate >= today
+    (d) => (d.status === 'Available' || d.status === 'On Duty') && d.licenseExpiryDate >= today
   );
+
+  const suggestedRevenue = Math.round((plannedDistanceKm * cargoWeightKg / 1000) * 38);
+  const revenueValue = revenueInput ?? String(suggestedRevenue);
 
   const selectedVehicle = vehicles.find((v) => v.id === vehicleId);
   const selectedDriver = drivers.find((d) => d.id === driverId);
@@ -57,6 +62,10 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({ isOpen, onClos
       setErrorMessage('Please select an available driver.');
       return;
     }
+    if (revenueValue.trim() === '' || Number(revenueValue) < 0) {
+      setErrorMessage('Enter the freight revenue for this trip (0 or more).');
+      return;
+    }
 
     const res = await createTrip({
       source,
@@ -65,6 +74,7 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({ isOpen, onClos
       driverId,
       cargoWeightKg: Number(cargoWeightKg),
       plannedDistanceKm: Number(plannedDistanceKm),
+      revenue: Number(revenueValue),
     });
 
     if (res.success) {
@@ -259,6 +269,40 @@ export const CreateTripModal: React.FC<CreateTripModalProps> = ({ isOpen, onClos
                 }`}
               />
             </div>
+          </div>
+
+          {/* Freight revenue */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">
+                Freight Revenue (₹)
+              </label>
+              {revenueInput !== null && (
+                <button
+                  type="button"
+                  onClick={() => setRevenueInput(null)}
+                  className="text-[10px] text-neutral-400 underline"
+                >
+                  Use suggested ₹{suggestedRevenue.toLocaleString('en-IN')}
+                </button>
+              )}
+            </div>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              required
+              value={revenueValue}
+              onChange={(e) => setRevenueInput(e.target.value)}
+              className={`w-full px-3 py-2 text-xs rounded-xl border outline-none font-semibold ${
+                isDark
+                  ? 'bg-[#191d26] border-[#272e3d] focus:border-[#ccff00]'
+                  : 'bg-neutral-50 border-[#ded7ca] focus:border-[#d97706]'
+              }`}
+            />
+            <p className="mt-1 text-[10px] text-neutral-400">
+              Amount charged to the customer. Suggested at ₹38 per tonne-km; shown on the trip receipt and used in profit and ROI.
+            </p>
           </div>
 
           {/* Overweight Warning Banner */}

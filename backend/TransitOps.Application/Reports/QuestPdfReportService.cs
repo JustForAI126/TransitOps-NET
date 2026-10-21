@@ -292,7 +292,7 @@ public class QuestPdfReportService : IPdfReportService
                         col.Item().Text("Official Delivery Turn-in & Dispatch Receipt").FontSize(10).FontColor(Colors.Grey.Darken2);
                     });
 
-                    row.ConstantItem(120).Text($"TRIP: {trip.TripCode}").Bold().FontSize(12).AlignRight();
+                    row.RelativeItem().AlignRight().Text($"TRIP: {trip.TripCode}").Bold().FontSize(9);
                 });
 
                 page.Content().PaddingVertical(15).Column(col =>

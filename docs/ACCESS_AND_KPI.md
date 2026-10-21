@@ -61,6 +61,7 @@ The dashboard uses persisted API records. Vehicle type, status, and region filte
 | Active Trips | Count of trips with status `Dispatched`, limited to trips whose assigned vehicle matches active dashboard filters. |
 | Pending Trips | Count of trips with status `Draft`, limited to trips whose assigned vehicle matches active dashboard filters. |
 | Drivers On Duty | Count of driver records with status `OnDuty` (`On Duty` in the UI). It is not filtered by vehicle type/status/region. |
+| Drivers Ready for Dispatch (Fleet Manager tile) | Drivers whose status is `Available` or `OnDuty` and whose licence has not expired, i.e. the drivers a new trip may be assigned to. Shown with the total driver count and the number currently on a trip. |
 | Fleet Utilization | `OnTrip vehicles / non-retired vehicles × 100`, rounded to one decimal place. The result is `0` when there are no non-retired vehicles. Vehicle filters define the numerator and denominator. |
 
 Retired vehicles are excluded from the utilization denominator. Empty filtered sets produce zero counts and an explicit empty dispatch state. The active-dispatch panel displays saved trip routes and does not claim to show GPS positions; the model has no live location coordinates.

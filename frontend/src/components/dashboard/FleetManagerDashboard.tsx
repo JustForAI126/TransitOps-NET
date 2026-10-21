@@ -60,6 +60,7 @@ export const FleetManagerDashboard: React.FC<FleetManagerDashboardProps> = ({
   const filteredTrips = trips.filter((trip) => filteredVehicleIds.has(trip.vehicleId));
   const nonRetiredVehicles = filteredVehicles.filter((vehicle) => vehicle.status !== 'Retired').length;
   const activeVehicles = filteredVehicles.filter((vehicle) => vehicle.status === 'On Trip').length;
+  const today = new Date().toISOString().split('T')[0];
   const kpis = {
     activeVehicles,
     availableVehicles: filteredVehicles.filter((vehicle) => vehicle.status === 'Available').length,
@@ -67,11 +68,15 @@ export const FleetManagerDashboard: React.FC<FleetManagerDashboardProps> = ({
     activeTrips: filteredTrips.filter((trip) => trip.status === 'Dispatched').length,
     pendingTrips: filteredTrips.filter((trip) => trip.status === 'Draft').length,
     driversOnDuty: drivers.filter((driver) => driver.status === 'On Duty').length,
+    // Same eligibility the API applies when a trip is created: Available or On Duty with a valid licence.
+    driversReady: drivers.filter((driver) =>
+      (driver.status === 'Available' || driver.status === 'On Duty') && driver.licenseExpiryDate >= today).length,
+    driversOnTrip: drivers.filter((driver) => driver.status === 'On Trip').length,
+    driversTotal: drivers.length,
     fleetUtilization: nonRetiredVehicles > 0
       ? Math.round((activeVehicles / nonRetiredVehicles) * 1000) / 10
       : 0,
   };
-  const today = new Date().toISOString().split('T')[0];
 
   const expiringDrivers = drivers.filter((d) => {
     const diffDays = Math.ceil(
@@ -92,7 +97,10 @@ export const FleetManagerDashboard: React.FC<FleetManagerDashboardProps> = ({
       { Metric: 'In Shop (Maintenance)', Value: kpis.vehiclesInMaintenance },
       { Metric: 'Active Trips', Value: kpis.activeTrips },
       { Metric: 'Pending / Draft Trips', Value: kpis.pendingTrips },
+      { Metric: 'Drivers Ready for Dispatch', Value: kpis.driversReady },
       { Metric: 'Drivers On Duty', Value: kpis.driversOnDuty },
+      { Metric: 'Drivers On Trip', Value: kpis.driversOnTrip },
+      { Metric: 'Total Drivers', Value: kpis.driversTotal },
       { Metric: 'Fleet Utilization Rate (%)', Value: `${kpis.fleetUtilization}%` },
     ];
     exportToCSV('transitops-fleet-manager-kpis', summary);
@@ -190,7 +198,7 @@ export const FleetManagerDashboard: React.FC<FleetManagerDashboardProps> = ({
           <option value="All">All regions</option>
           {[...new Set(vehicles.map((vehicle) => vehicle.region))].sort().map((region) => <option key={region} value={region}>{region}</option>)}
         </select>
-        <span className="text-[10px] text-neutral-400">On-duty driver count is fleet-wide; driver records are not associated with vehicle regions or types.</span>
+        <span className="text-[10px] text-neutral-400">Driver counts are fleet-wide; driver records are not associated with vehicle regions or types.</span>
       </div>
 
       {/* KPI Cards Row (7 Operational KPIs) */}
@@ -269,8 +277,13 @@ export const FleetManagerDashboard: React.FC<FleetManagerDashboardProps> = ({
             <span className="text-[11px] font-bold uppercase tracking-wider">Drivers</span>
             <Users className="w-4 h-4 text-cyan-400" />
           </div>
-          <div className="text-2xl font-black font-mono">{kpis.driversOnDuty}</div>
-          <div className="text-[11px] text-neutral-500 mt-1">Eligible on duty</div>
+          <div className="text-2xl font-black font-mono">
+            {kpis.driversReady}
+            <span className="text-sm font-semibold text-neutral-400"> / {kpis.driversTotal}</span>
+          </div>
+          <div className="text-[11px] text-neutral-500 mt-1">
+            Ready for dispatch · {kpis.driversOnTrip} on trip
+          </div>
         </div>
 
         <div

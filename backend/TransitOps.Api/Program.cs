@@ -296,8 +296,13 @@ if (app.Configuration.GetValue<bool>("ReverseProxy:TrustAllProxies"))
 app.UseForwardedHeaders(forwardedHeaders);
 app.UseExceptionHandler();
 // The production image puts the built React app in wwwroot so the UI, API and SignalR share one origin.
-app.UseDefaultFiles();
-app.UseStaticFiles();
+// Locally the React dev server serves the UI and there is no wwwroot, so skip static files there.
+var hasWebRoot = Directory.Exists(app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot"));
+if (hasWebRoot)
+{
+    app.UseDefaultFiles();
+    app.UseStaticFiles();
+}
 app.UseRouting();
 app.UseCors("TransitOpsFrontend");
 app.UseRateLimiter();
@@ -328,7 +333,7 @@ app.MapControllers();
 app.MapHub<TransitOpsHub>("/hubs/transitops");
 // Liveness probe for the hosting platform; anonymous and outside every rate limit.
 app.MapHealthChecks("/api/health").AllowAnonymous().DisableRateLimiting();
-if (app.Environment.WebRootPath is { } webRoot && File.Exists(Path.Combine(webRoot, "index.html")))
+if (hasWebRoot && File.Exists(Path.Combine(app.Environment.WebRootPath!, "index.html")))
 {
     // Client-side routes such as /vehicles load the SPA; unknown /api paths still return 404.
     app.MapFallbackToFile("{*path:regex(^(?!api/|hubs/|swagger).*$)}", "index.html").AllowAnonymous();

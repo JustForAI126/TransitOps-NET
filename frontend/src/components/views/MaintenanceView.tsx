@@ -4,15 +4,10 @@ import {
   Plus,
   Search,
   CheckCircle2,
-  Clock,
-  IndianRupee,
   Download,
-  AlertTriangle,
-  Truck,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useTheme } from '../../context/ThemeContext';
-import { MaintenanceRecord } from '../../types';
 import { formatRupees } from '../../utils/currency';
 
 interface MaintenanceViewProps {
@@ -24,7 +19,6 @@ export const MaintenanceView: React.FC<MaintenanceViewProps> = ({ onOpenLogMaint
     maintenanceRecords,
     closeMaintenanceRecord,
     currentUser,
-    vehicles,
     exportToCSV,
   } = useApp();
   const { theme } = useTheme();

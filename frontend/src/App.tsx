@@ -24,7 +24,6 @@ import { DriversView } from './components/views/DriversView';
 import { MaintenanceView } from './components/views/MaintenanceView';
 import { ExpensesView } from './components/views/ExpensesView';
 import { ReportsView } from './components/views/ReportsView';
-import { AnalyticsView } from './components/views/AnalyticsView';
 import { OrganizationAdminDashboard } from './components/views/OrganizationAdminDashboard';
 import { Trip, UserRole } from './types';
 
@@ -103,7 +102,7 @@ const MainLayout: React.FC = () => {
         ) : (
           <div className="flex-1 flex overflow-hidden min-h-0">
             {/* Desktop and Mobile Sidebar (Static Navigation Panel) */}
-            <Sidebar onOpenNewTripModal={() => setIsNewTripOpen(true)} />
+            <Sidebar />
 
             {/* Main Scrollable Content */}
             <main className="flex-1 overflow-y-auto h-full pb-20 md:pb-8">

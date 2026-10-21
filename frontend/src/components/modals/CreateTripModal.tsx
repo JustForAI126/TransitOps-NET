@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, AlertTriangle, Check, Route, ShieldAlert, Scale, Fuel } from 'lucide-react';
+import { X, AlertTriangle, Check, Route, ShieldAlert, Scale } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useTheme } from '../../context/ThemeContext';
 

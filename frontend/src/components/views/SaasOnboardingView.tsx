@@ -3,7 +3,6 @@ import { ArrowLeft, Building2, CheckCircle2, CreditCard, Eye, EyeOff, Mail } fro
 import { useApp } from '../../context/AppContext';
 import { useTheme } from '../../context/ThemeContext';
 import {
-  ApiRequestError,
   api,
   PaymentVerification,
   PurchaseProgress,
@@ -83,7 +82,7 @@ export const SaasOnboardingView: React.FC<{ initialMode: OnboardingMode }> = ({ 
   const [purchase, setPurchase] = useState<PurchaseSession | null>(null);
   const [pendingPayment, setPendingPayment] = useState<RazorpayCheckoutResult | null>(null);
   const [verificationCode, setVerificationCode] = useState('');
-  const [accountToken, setAccountToken] = useState(
+  const [accountToken] = useState(
     new URLSearchParams(window.location.search).get('token') ?? '',
   );
   const [organizationName, setOrganizationName] = useState('');

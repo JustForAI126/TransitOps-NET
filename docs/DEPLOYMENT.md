@@ -34,7 +34,7 @@ Environment variables set in Render (values are in Render, never in Git):
 | `DemoData__Enabled` | `true` |
 | `DemoAccounts__Password` | **The same value as `DemoAccounts:Password` in the laptops' User Secrets.** Every start resets the demo accounts to this password; different values on the laptop and on Render make them overwrite each other. |
 | `Razorpay__KeyId`, `Razorpay__KeySecret`, `Razorpay__WebhookSecret` | Razorpay Test Mode keys |
-| `Email__Smtp__*` | Brevo: Host `smtp-relay.brevo.com`, Port `2525`, EnableSsl `true`, UserName = the Brevo SMTP login (`...@smtp-brevo.com`), Password = the Brevo SMTP key, FromAddress = a verified Brevo sender. Render's free plan blocks port 587, so Gmail cannot be used there. |
+| `Email__Smtp__*` | Brevo: Host `smtp-relay.brevo.com`, Port `2525`, EnableSsl `true`, UserName = the Brevo SMTP login (`...@smtp-brevo.com`), Password = the Brevo SMTP key, FromAddress = **the email the Brevo account was created with** (or another address added and confirmed under Brevo → Senders). Render's free plan blocks port 587, so Gmail cannot be used there. |
 
 Rules for the shared database: run **at most one laptop** against Supabase while the live site is up, and try
 destructive experiments in the offline test mode (`Start TransitOps (test mode).cmd`), not on Supabase.
@@ -48,6 +48,7 @@ destructive experiments in the offline test mode (`Start TransitOps (test mode).
 | `28P01: password authentication failed for user "postgres"` | A typo in the pasted connection string | Delete the variable and add it again by copy-paste |
 | Demo login fails on the live site | `DemoAccounts__Password` on Render differed from the laptop's | Use the same value in both places |
 | `5.7.0 Please authenticate first` (no email arrives) | .NET's built-in `System.Net.Mail.SmtpClient` never logs in to Brevo | The app now sends email with MailKit, which authenticates correctly with Brevo and Gmail |
+| API says the code was sent, but no email arrives and Brevo shows no delivery | `Email__Smtp__FromAddress` was not a verified Brevo sender, so Brevo silently dropped the mail | Set it to the Brevo sign-up email, or verify the address under Brevo → Senders |
 
 ## 1. Database (Supabase)
 

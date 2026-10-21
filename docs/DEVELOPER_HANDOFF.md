@@ -125,7 +125,6 @@ Generated directories such as `node_modules/`, `dist/`, `.NET bin/obj/`, and `.g
 | `frontend/src/components/views/MaintenanceView.tsx` | Maintenance work order listing, creation, and closure UI, subject to role rules. |
 | `frontend/src/components/views/ExpensesView.tsx` | Fuel and other expense viewing and supported expense actions. |
 | `frontend/src/components/views/ReportsView.tsx` | Financial and vehicle ROI summaries, filters/sorts, CSV export controls, and role-specific PDF downloads. |
-| `frontend/src/components/views/AnalyticsView.tsx` | Analytics presentation using current workspace metrics and shared app data. |
 | `frontend/src/components/dashboard/FleetManagerDashboard.tsx` | Fleet KPIs, vehicle filters, dispatch overview, operational attention items, and Fleet Manager actions. |
 | `frontend/src/components/dashboard/DriverDashboard.tsx` | Driver-focused trip/dispatch dashboard. |
 | `frontend/src/components/dashboard/SafetyOfficerDashboard.tsx` | Licence, driver safety, and active maintenance safety dashboard. |
@@ -161,7 +160,12 @@ Generated directories such as `node_modules/`, `dist/`, `.NET bin/obj/`, and `.g
 | `backend/TransitOps.Infrastructure/Services/KpiService.cs` | PostgreSQL/EF Core-backed role KPI calculations behind `IKpiService`. |
 | `backend/TransitOps.Infrastructure/BackgroundJobs/HangfireJobs.cs` | Scheduled tasks for licence expiry review, maintenance schedule audit, and stale trip reconciliation. |
 | `backend/TransitOps.Api/TransitOps.Api.csproj` | Web API project definition, target framework, project references, and API-specific packages. Contains the `UserSecretsId`; the actual secret values belong outside the repository. |
-| `backend/TransitOps.Api/Program.cs` | Composition root: configuration, PostgreSQL, Identity, JWT, authorization policies, SignalR, Hangfire, validation, CORS, Swagger, middleware, controllers, startup schema initialization, and Development-only demo seeding. |
+| `backend/TransitOps.Api/Program.cs` | Composition root: configuration, PostgreSQL, Identity, JWT, authorization policies, SignalR, Hangfire, validation, CORS, Swagger, middleware and endpoints. Calls the startup helpers below. |
+| `backend/TransitOps.Api/Startup/DatabaseInitializer.cs` | On startup: creates the app tables on an empty database, applies EF migrations and the idempotent index SQL, then runs demo seeding when enabled. |
+| `backend/TransitOps.Api/Startup/DemoDataSeeder.cs` | Idempotent `demo_tenant` data: sample fleet and trip history, the five demo logins (password synchronised from `DemoAccounts:Password`), demo driver safety profiles and score recalculation. |
+| `backend/TransitOps.Api/Startup/PostgresConnectionString.cs` | Parses key=value or `postgres://` URI connection strings (Supabase format) into Npgsql settings. |
+| `backend/TransitOps.Api/Startup/RecurringJobs.cs` | Registers the daily Hangfire schedules. |
+| `backend/TransitOps.Api/Startup/FleetManagerDashboardAuthorizationFilter.cs` | Restricts the Hangfire dashboard to authenticated Fleet Managers. |
 | `backend/TransitOps.Api/appsettings.json` | Non-secret API defaults such as logging, JWT issuer/audience, CORS origins, and allowed hosts. Do not put database credentials or signing secrets here. |
 | `backend/TransitOps.Api/Properties/launchSettings.json` | Local launch profile/environment and localhost API URL/port used by `dotnet run`. |
 | `backend/TransitOps.Api/Hubs/TransitOpsHub.cs` | Authenticated SignalR hub and client event contract. |
